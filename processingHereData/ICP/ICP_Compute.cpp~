@@ -1,0 +1,344 @@
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <cmath>
+#include<vector>
+
+#include "dlib/optimization/optimization.h"
+#include "dlib/optimization/find_optimal_parameters_abstract.h"
+#include "dlib/optimization/optimization_bobyqa.h"
+#include "dlib/optimization/find_optimal_parameters.h"
+
+using namespace std;
+using namespace dlib;
+
+
+typedef dlib::matrix<double,0,1> column_vector;
+
+struct point_cloud_data{
+
+	std::vector <double> x_coord;
+	std::vector <double> y_coord;
+	std::vector <double> z_coord;
+	std::vector <int> index;
+	int size ;	
+};
+
+	point_cloud_data measurement_data;
+	point_cloud_data model_data;
+	int iterations = 0;
+
+void cal_closest_points(const column_vector &rt, point_cloud_data * measurement_data, point_cloud_data * model_data);
+double findTotalErrorInCloud(const column_vector &input);
+
+long double car_x = 0.00772 + 0.00005;
+long double car_y = -0.0033 + 0.00005;
+long double car_z = 0.0;
+long double point_x, point_y, point_z;
+long double dist, theta, phi;
+
+
+void findPointInCloud(double lat, double lon, double height){
+
+  dist = sqrt(pow((lat),2) + pow((lon),2) + pow(height,2));
+  
+  theta = atan((lon)/lat);
+  if(lat < 0)
+	theta += M_PI;
+
+  phi = acos((height)/dist);
+
+}
+
+void findCoordinateInCloud()
+{
+
+  theta += 0.00;
+
+  point_x =  dist*cos(theta)*sin(phi);
+  point_y =  dist*sin(theta)*sin(phi);
+  point_z =  dist*cos(phi);
+
+}
+dlib::matrix<double> PerformRotation(dlib::matrix<double> R,dlib::matrix<double> t, dlib::matrix<double> point)
+{
+	dlib::matrix<double> point_new(3,1);
+	point_new = R*point + t;
+	return point_new;
+}
+
+int main()
+{
+	
+
+	
+	
+	ifstream infile1;
+  	infile1.open ("icp_model.csv");
+	ifstream infile2;
+  	infile2.open ("icp_sensor_scan.csv");
+	char* pEnd;
+	string x,y,z;
+
+	// Reading data from the measurement dat csv file
+
+	 while(!infile1.eof()){
+		getline(infile1,x, ',');
+		getline(infile1,y, ',');
+		getline(infile1,z);
+		//getline(infile,index);
+		measurement_data.x_coord.push_back(strtod(x.c_str(),&pEnd));
+		measurement_data.y_coord.push_back(strtod(y.c_str(),&pEnd));
+		measurement_data.z_coord.push_back(strtod(z.c_str(),&pEnd));
+		measurement_data.index.push_back(-1);
+		//measurement_data.index.push_back(std::atoi(index.c_str()));
+	}
+
+	// Reading data from the model map data csv file 
+
+
+	 while(!infile2.eof()){
+		getline(infile2,x, ',');
+		getline(infile2,y, ',');
+		getline(infile2,z);
+		//getline(infile,index);
+		model_data.x_coord.push_back(strtod(x.c_str(),&pEnd));
+		model_data.y_coord.push_back(strtod(y.c_str(),&pEnd));
+		model_data.z_coord.push_back(strtod(z.c_str(),&pEnd));
+		//measurement_data.index.push_back(std::atoi(index.c_str()));
+	}
+	//Rotational function test
+	theta = M_PI/4;
+	point_x = 0.01;
+	point_y = 0.01;
+	point_z = 0.0;
+	dlib::matrix<double> R(3,3);
+	dlib::matrix<double> t(3,1);
+	dlib::matrix<double> point(3,1);
+	dlib::matrix<double> Rot_point(3,1);
+
+	R = cos(theta), -sin(theta), 0,
+	    sin(theta), cos(theta), 0,
+	    0, 0, 1;
+
+	t = point_x, point_y, point_z;
+
+	Rot_point = PerformRotation(R, t, point);
+
+	for(int i = 0; i < measurement_data.size; i++)
+	{
+		point_x = measurement_data.x_coord.at(i);
+		point_y = measurement_data.y_coord.at(i);
+		point_z = measurement_data.z_coord.at(i);
+		findPointInCloud(point_x, point_y, point_z);
+		//theta = theta - 0.6;
+		findCoordinateInCloud();
+		double temp_x = point_x;
+		//point_x = point_x + 0.0005;
+		//point_y = point_y + 0.0005;
+
+		//point_x = point_x - 0.0005;
+		//point_y = point_y - 0.0005;
+
+		findPointInCloud(point_x, point_y, point_z);
+		//theta = theta + 0.6;
+		findCoordinateInCloud();
+
+
+
+		//long double distance = sqrt(pow((x_temp - measurement_data.x_coord.at(i)),2) + pow((y_temp - measurement_data.y_coord.at(i)),2) + pow((z_temp - measurement_data.z_coord.at(i)),2));
+		cout<<"Distance error per point "<<measurement_data.x_coord.at(i) - point_x<<endl;
+		
+	}
+
+
+
+
+
+	//cout<<"Untransformed point"<<point<<endl;
+	//cout<<"Rotation point is "<<Rot_point<<endl;
+
+
+
+
+
+	/*
+
+	measurement_data.size = measurement_data.x_coord.size(); 
+	model_data.size = model_data.x_coord.size(); 
+	cout<<"model"<<model_data.size<<endl;
+	cout<<"measured"<<measurement_data.size<<endl;
+
+
+	column_vector rt(4), rt_lower(4), rt_upper(4);
+	rt = 0.06,-0.00005,-0.00005,0.0;
+	rt_lower = -1.0, -1.0,-1.0,-1.0;
+	rt_upper = 1.0, 1.0, 1.0, 1.0;
+	//double error_check = findTotalErrorInCloud(rt);
+	//std::cout<<"Error value "<<error_check<<std::endl;
+	*/
+	/*
+	cout<<atan(1/1)<<endl;
+	cout<<atan(-1/1)<<endl; 
+	cout<<atan(1/-1) + M_PI<<endl;  ///bad
+	cout<<atan(-1/-1)+ M_PI<<endl;  //bad
+	
+	for(int i = 0; i < measurement_data.size; i++)
+	{
+		point_x = measurement_data.x_coord.at(i);
+		point_y = measurement_data.y_coord.at(i);
+		point_z = measurement_data.z_coord.at(i);
+		findPointInCloud(point_x, point_y, point_z);
+		//theta = theta - 0.6;
+		findCoordinateInCloud();
+		double temp_x = point_x;
+		//point_x = point_x + 0.0005;
+		//point_y = point_y + 0.0005;
+
+		//point_x = point_x - 0.0005;
+		//point_y = point_y - 0.0005;
+
+		findPointInCloud(point_x, point_y, point_z);
+		//theta = theta + 0.6;
+		findCoordinateInCloud();
+
+
+
+		//long double distance = sqrt(pow((x_temp - measurement_data.x_coord.at(i)),2) + pow((y_temp - measurement_data.y_coord.at(i)),2) + pow((z_temp - measurement_data.z_coord.at(i)),2));
+		cout<<"Distance error per point "<<measurement_data.x_coord.at(i) - point_x<<endl;
+		
+	} */
+	
+	/*
+	for( int i = 0; i < 20; i++){
+
+		// Function call to ICP calculation function 
+	
+		cal_closest_points(rt, &measurement_data, &model_data);
+
+	
+		double final_error = find_optimal_parameters(0.01, 0.0000001,100000, rt, rt_lower, rt_upper,findTotalErrorInCloud);
+	
+		cout<<"Print input "<<rt<<endl;
+		cout<<"error between current 'closest point' point cloud : "<<final_error<<endl;
+		cout<<"total iterations: "<<iterations<<endl;
+		cout<<"closest point iterations: "<<i<<endl;
+
+	}
+	
+	return 0;
+}
+
+void cal_closest_points(const column_vector &rt, point_cloud_data * measurement_data, point_cloud_data * model_data)
+{
+
+	point_cloud_data transformed_data;
+	double theta_shift = rt(0);
+	double x_shift = rt(1);
+	double y_shift = rt(2);
+	double z_shift = rt(3);
+
+
+	float distance = 0.0;
+	int best_index ;
+	float closest_distance ;
+	for(int i = 0; i < measurement_data->size; i++)
+	{
+		
+		point_x = measurement_data->x_coord.at(i);
+		point_y = measurement_data->y_coord.at(i);
+		point_z = measurement_data->z_coord.at(i);
+		/*
+		findPointInCloud(point_x, point_y, point_z);
+		theta = theta - 0.06;
+		findCoordinateInCloud();
+		point_x = point_x + 0.0005;
+		point_y = point_y + 0.0005;
+		*/
+
+		point_x = point_x + x_shift;
+		point_y = point_y + y_shift;
+		point_z = point_z + z_shift;
+
+		findPointInCloud(point_x, point_y, point_z);
+		theta = theta + theta_shift;
+		findCoordinateInCloud();
+		
+		transformed_data.x_coord.push_back(point_x);
+		transformed_data.y_coord.push_back(point_y);
+		transformed_data.z_coord.push_back(point_z);
+		cout<<"hello: "<<point_x-measurement_data->x_coord.at(i)<<endl;
+
+		best_index = 0;
+		closest_distance = 65535;
+		for(int j = 0; j < model_data->size; j++)
+		{
+			
+			distance = sqrt(pow((transformed_data.x_coord.at(i) - model_data->x_coord.at(j)),2) + pow((transformed_data.y_coord.at(i) - model_data->y_coord.at(j)),2) + pow((transformed_data.z_coord.at(i) - model_data->z_coord.at(j)),2));
+			
+			if(distance < closest_distance)
+			{
+				closest_distance = distance;
+				best_index = j;
+			}
+		
+
+		}
+/*		
+		cout<<"closest_distance"<<closest_distance<<endl;
+		//cout<<"best index: "<<best_index<<" i "<<i<<endl;
+		if (best_index != i){	
+			cout<<"fail"<<endl;
+		} else {cout<<"success"<<endl;}  */
+		measurement_data->index.at(i) = best_index;
+	
+	}
+	std::cout<<"Size of index "<<measurement_data->index.size()<<endl;
+
+}
+
+
+
+double findTotalErrorInCloud(const column_vector &rt)
+{
+	iterations++;
+	double total_error = 0.0;
+	point_cloud_data transformed_data;
+	double theta = rt(0);
+	double x = rt(1);
+	double y = rt(2);
+	double z = rt(3);
+	
+	double true_map_error = 0.0;
+	
+	for(int i = 0; i < measurement_data.size; i++)
+	{
+
+		double x_temp = cos(theta)*measurement_data.x_coord.at(i) - sin(theta)*measurement_data.y_coord.at(i) + x;
+		double y_temp = sin(theta)*measurement_data.x_coord.at(i) + cos(theta)*measurement_data.y_coord.at(i) + y;
+		double z_temp = z;
+		transformed_data.x_coord.push_back(x_temp);
+		transformed_data.y_coord.push_back(y_temp);
+		transformed_data.z_coord.push_back(z_temp);
+
+		int j = measurement_data.index.at(i);
+
+		total_error +=sqrt(pow((transformed_data.x_coord.at(i) - model_data.x_coord.at(i)),2) + pow((transformed_data.y_coord.at(i) - model_data.y_coord.at(i)),2) + pow((transformed_data.z_coord.at(i) - model_data.z_coord.at(i)),2)); 
+		true_map_error +=sqrt(pow((transformed_data.x_coord.at(i) - model_data.x_coord.at(i)),2) + pow((transformed_data.y_coord.at(i) - model_data.y_coord.at(i)),2) + pow((transformed_data.z_coord.at(i) - model_data.z_coord.at(i)),2)); 
+		
+	}
+
+	double sign_object_localizer = measurement_data.size * sqrt(pow((transformed_data.x_coord.at(0) - model_data.x_coord.at(0)),2) + pow((transformed_data.y_coord.at(0) - model_data.y_coord.at(0)),2) + pow((transformed_data.z_coord.at(0) - model_data.z_coord.at(0)),2)); 
+
+	//total_error += sign_object_localizer;
+
+	cout<<"current error: "<<total_error<<endl;
+	cout<<"true map error: "<<true_map_error<<endl;
+
+	return total_error;
+}
+
+
+	
+
+
