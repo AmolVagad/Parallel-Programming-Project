@@ -55,10 +55,13 @@ Resources
 ● A. Ratter, C. Sammut and M. McGill, "GPU accelerated graph SLAM and occupancy voxel
 based ICP for encoder-free mobile robots," 2013 IEEE/RSJ International Conference on
 Intelligent Robots and Systems, Tokyo, 2013, pp. 540-547.
+
 ● C. Langis, M. Greenspan and G. Godin, "The parallel iterative closest point algorithm,"
 Proceedings Third International Conference on 3-D Digital Imaging and Modeling, Quebec City,
 Que., 2001, pp. 195-202.
+
 ● A. Milstein, M. McGill, T. Wiley, R. Salleh, and C. Sammut, "Occupancy voxel metric based
 iterative closest point for position tracking in 3d environments," in ICRA. IEEE, 2011, pp.
 4048-4053.
+
 ● https://www.coursera.org/learn/robotics-learning/lecture/1jDix/iterative-closest-point
