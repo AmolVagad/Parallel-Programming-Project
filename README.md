@@ -4,6 +4,8 @@ Semester project for Applied parallel programming class EE 5351 , fall 2017.
 
 
 Introduction
+
+
 Localization is an important aspect in the Autonomous Vehicles technologies, especially in an Urban
 environment. For cars to follow traffic rules and regulations, it should have precise information about its
 current lanes and the path to be taken ahead. In order to obtain this information, it needs to localize itself
@@ -13,6 +15,8 @@ implement a parallel ICP algorithm for localizing a development vehicle in a giv
 
 
 Description
+
+
 Iterative Closest Point (ICP) is an algorithm used to minimize the difference between 2 point clouds. It
 gives the rotation and translation required to be applied to one point cloud(source) in order to match it
 with the other(reference). The matching parameter used is nothing but a mean square error between the 2
@@ -23,6 +27,8 @@ Rotation R and translation t.
 
 
 Objective
+
+
 We intend to implement this application at a local automotive research company VSI-Labs​ ​, St. Louis
 Park facility where we both project members currently are employed as interns. The main objective is to
 use HD maps data from the map developer company HERE and carry out Localization of our
@@ -36,6 +42,7 @@ with 2 Pascal GPU’s if time permits.
 
 
 Background
+
 We both are currently graduate students in the EE department with background in Robotics, Computer
 Vision, Algorithms and Optimization theory. The key skills required to understand and implement ICP is
 a basic knowledge of Linear Algebra, Kinematics, understanding of convergence of functions (Calculus)
