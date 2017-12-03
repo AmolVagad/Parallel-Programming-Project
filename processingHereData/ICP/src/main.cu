@@ -26,8 +26,9 @@ extern "C"
 
 
 
+// Function to carry out Rotation of given point on the device 
 
-dlib::matrix<double> PerformRotation(dlib::matrix<double> R_h,dlib::matrix<double> t_h, dlib::matrix<double> Point_h,  dlib::matrix<double> Rotated_Point_h)
+dlib::matrix<double> PerformRotationOnDevice(dlib::matrix<double> R_h,dlib::matrix<double> t_h, dlib::matrix<double> Point_h,  dlib::matrix<double> Rotated_Point_h)
 {
 	int n = 3;
 	int size = n*sizeof(double);
@@ -61,28 +62,17 @@ dlib::matrix<double> PerformRotation(dlib::matrix<double> R_h,dlib::matrix<doubl
 	
 	// Kernel Call 
 	 
-	 
-	 
-	 // Setup the execution configuration
+ // Setup the execution configuration
     	int blocks_w = N.width/TILE_WIDTH ;
     	int blocks_h = M.height /TILE_WIDTH;
     
    
 	if(M.width % TILE_WIDTH)
-
-	{
-
 		blocks_w ++;
 
-	}
 	if(M.height % TILE_WIDTH)
-
-	{
-
 		blocks_h ++;
-
-	}
-         
+		         
 	dim3 dimGrid(blocks_w, blocks_h, 1);
 
 	dim3 dimBlock(TILE_WIDTH, TILE_WIDTH,1);
@@ -90,16 +80,188 @@ dlib::matrix<double> PerformRotation(dlib::matrix<double> R_h,dlib::matrix<doubl
     // Launch the device computation threads!
 
      PerformRotationKernel<<<dimGrid,dimBlock>>>(P_d, t_d, Point_d, New_Point_d);
-	
-	
-	
+		
 	// Transfer Rotated Point from device to host
      cudaMemcpy(Rotated_Point_h, Rotated_Point_d, size, cudaMemcpyDeviceToHost);
        // Free device memory for all
      cudaFree(P_d); cudaFree(t_d); cudaFree (Point_d);cudaFree (Rotated_Point_d);
      
-     return Rotated_Point_h;
-	
+     return Rotated_Point_h;	
 	
 }
+
+
+
+
+
+
+// Function that calls transformation function and stores the transformed values 
+
+void PerformTransformationToAllPoints(dlib::matrix<double> R, dlib::matrix<double> t, point_cloud_data * data, point_cloud_data * transformed_data, int skips)
+{
+	for(int i  = 0; i < data->size; i++)
+	{
+		dlib::matrix<double,3,1> point, point_new;
+		point = data->x_coord.at(i), data->y_coord.at(i), data->z_coord.at(i);
+		point_new = PerformRotation(R, t, point);
+		transformed_data->x_coord.push_back(point_new(0));
+		transformed_data->y_coord.push_back(point_new(1));
+		transformed_data->z_coord.push_back(point_new(2));		 
+	}
+	transformed_data->size = transformed_data->x_coord.size();
+	
+}
+
+
+
+
+
+// The main function 
+
+int main()
+{
+	
+
+	
+	
+	ifstream infile1;
+  	infile1.open ("icp_model.csv");
+	//ifstream infile2;
+  	//infile2.open ("icp_sensor_scan.csv");
+	char* pEnd;
+	string x,y,z;
+
+
+	// Reading data from the model map data csv file 
+
+	
+	 while(!infile1.eof()){
+		getline(infile1,x, ',');
+		getline(infile1,y, ',');
+		getline(infile1,z);
+		//getline(infile,index);
+		model_data.x_coord.push_back(strtod(x.c_str(),&pEnd));
+		model_data.y_coord.push_back(strtod(y.c_str(),&pEnd));
+		model_data.z_coord.push_back(strtod(z.c_str(),&pEnd));
+		measurement_data.index.push_back(-1);
+		measurement_data.bin_index_x.push_back(-1);
+		measurement_data.bin_index_y.push_back(-1);
+		measurement_data.bin_index_z.push_back(-1);
+	
+	}
+	
+	//Remove the last elements
+	model_data.x_coord.pop_back();
+	model_data.y_coord.pop_back();
+	model_data.z_coord.pop_back();
+	model_data.size = model_data.size - 1;
+
+	// Calculating the min and max values of x,y,z
+	double max_x =  *max_element(model_data.x_coord.begin(),model_data.x_coord.end()) ;
+	double max_y =  *max_element(model_data.y_coord.begin(),model_data.y_coord.end()) ;
+	double max_z =  *max_element(model_data.z_coord.begin(),model_data.z_coord.end()) ;
+	min_x =  *min_element(model_data.x_coord.begin(),model_data.x_coord.end()) ;
+	min_y =  *min_element(model_data.y_coord.begin(),model_data.y_coord.end()) ;
+	min_z =  *min_element(model_data.z_coord.begin(),model_data.z_coord.end()) ;
+	
+
+	//cout<<"Min x value "<<min_x<<endl;
+	// Calculating the range
+	range_x = max_x - min_x; 
+	range_y = max_y - min_y; 
+	range_z = max_z - min_z;
+		
+	//cout<<"Range x value "<<range_x<<endl;
+
+	model_data.size = model_data.x_coord.size();
+	//cout<<"model data value "<<model_data.size<<endl;
+	
+	
+	// Storing the data into Octrees 
+	for(int i= 0; i < model_data.size; i++)
+	{
+		int index_x = 0;
+		int index_y = 0;
+		int index_z = 0;
+		
+		index_x = floor(((model_data.x_coord.at(i)  - min_x)/range_x)*bin_size);
+		index_y= floor(((model_data.y_coord.at(i)  - min_y)/range_y)*bin_size);
+		index_z = floor(((model_data.z_coord.at(i)  - min_z)/range_z)*bin_size);
+		
+		// Boundary conditon 
+		index_x = min(index_x, bin_size - 1);
+		index_y = min(index_y, bin_size - 1);
+		index_z = min(index_z, bin_size - 1);
+		
+		
+		octree_icp(index_x, index_y, index_z).push_back(model_data.x_coord.at(i));
+		octree_icp(index_x, index_y, index_z).push_back(model_data.y_coord.at(i));
+		octree_icp(index_x, index_y, index_z).push_back(model_data.z_coord.at(i));
+		
+	}
+	
+	//cout<<"Octree at 0 "<<octree_icp(0,0,0)[0]<<endl;		
+		
+	
+
+	//Rotational function test
+	double theta = 0.03;
+	double point_x = 0.003;
+	double point_y = 0.005;
+	double point_z = 0.0;
+	dlib::matrix<double> R(3,3);
+	dlib::matrix<double> t(3,1);
+
+	R = cos(theta), -sin(theta), 0,
+	    sin(theta), cos(theta), 0,
+	    0, 0, 1;
+
+	t = point_x, point_y, point_z;
+	
+
+	// Generate mesasurement datra by rorating the model data
+	PerformTransformationToAllPoints(R, t, &model_data, &measurement_data,1);
+
+
+	//Calling closest point.
+	column_vector rt(4), rt_lower(4), rt_upper(4);
+
+	rt = -theta, -cos(theta)*point_x - sin(theta)*point_y, sin(theta)*point_x - cos(theta)*point_y, point_z;
+	cout<<"rt: "<<rt<<endl;
+
+	rt = -0.0,0.0,0.0,0.0;
+	rt_lower = -1.0, -1.0,-1.0,-1.0;
+	rt_upper = 1.0, 1.0, 1.0, 1.0;
+	
+
+	double final_error = 0;
+	// time measurement variables 
+
+/*
+	double cpu_starttime , cpu_endtime;
+	for(int i = 0; i<20; i++)
+	{
+		cout<<"iteration #: "<<i<<endl;
+		cpu_starttime = clock();
+		cal_closest_points(rt);
+		cpu_endtime = clock();
+		cout<<"The time taken for calculation = "<<((cpu_endtime - cpu_starttime)/CLOCKS_PER_SEC)<<endl;
+
+		final_error = find_optimal_parameters(0.01, 0.000000001,100000, rt, rt_lower, rt_upper,findTotalErrorInCloud);
+		cout<<"Rt parameters "<<rt<<endl;
+		cout<<"current error: "<<final_error<<endl;
+		
+	}
+	//cout<<"Error after optimization "<<final_error<<endl;
+*/
+	
+	
+
+
+	return 0;
+}
+
+
+
+
 	
