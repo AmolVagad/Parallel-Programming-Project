@@ -1,23 +1,24 @@
 
 NVCC        = nvcc
-NVCC_FLAGS  = -I/usr/local/cuda/include -gencode=arch=compute_60,code=\"sm_60\"
+
+NVCC_FLAGS  = -I/usr/local/cuda/include -gencode=arch=compute_50,code=\"sm_50,compute_50\"
 ifdef dbg
-	NVCC_FLAGS  += -g -G
+	NVCC_FLAGS  += -g 
 else
-	NVCC_FLAGS  += -O3
+	NVCC_FLAGS  += -O2
 endif
 
 LD_FLAGS    = -lcudart -L/usr/local/cuda/lib64
-EXE	        = run_icp
-OBJ	        = main.o globals.o
+EXE	        = icp
+OBJ	        = icp_cu.o icp_cpp.o
 
 default: $(EXE)
 
-main.o: main.cu kernel.cu support.h
-	$(NVCC) -c -o $@ main.cu $(NVCC_FLAGS)
+icp_cu.o: icp_main.cu icp_kernel.cu globals.h
+	$(NVCC) -c -o $@ matrixmul.cu $(NVCC_FLAGS)
 
-support.o: support.cu support.h
-	$(NVCC) -c -o $@ support.cu $(NVCC_FLAGS)
+icp_cpp.o: icp_gold.cpp globals.h
+	$(NVCC) -c -o $@ icp_gold.cpp $(NVCC_FLAGS) 
 
 $(EXE): $(OBJ)
 	$(NVCC) $(OBJ) -o $(EXE) $(LD_FLAGS) $(NVCC_FLAGS)
