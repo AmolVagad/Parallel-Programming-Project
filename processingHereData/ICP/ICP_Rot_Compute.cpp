@@ -26,9 +26,11 @@ double min_z = 0;
 double range_x = 0;
 double range_y = 0;
 double range_z = 0;
+int bin_size = 4;
+
 
 // Define Octree 
-Octree<std::vector<double>> octree_icp(4); 
+Octree<std::vector<double>> octree_icp(bin_size); 
 
 
 
@@ -159,16 +161,15 @@ int main()
 		int index_y = 0;
 		int index_z = 0;
 		
-		index_x = floor(((model_data.x_coord.at(i)  - min_x)/range_x)*4);
-		index_y= floor(((model_data.y_coord.at(i)  - min_y)/range_y)*4);
-		index_z = floor(((model_data.z_coord.at(i)  - min_z)/range_z)*4);
+		index_x = floor(((model_data.x_coord.at(i)  - min_x)/range_x)*bin_size);
+		index_y= floor(((model_data.y_coord.at(i)  - min_y)/range_y)*bin_size);
+		index_z = floor(((model_data.z_coord.at(i)  - min_z)/range_z)*bin_size);
 		
 		// Boundary conditon 
-		index_x = min(index_x, 3);
-		index_y = min(index_y, 3);
-		index_z = min(index_z, 3);
-		if(index_x > 3 || index_x < 0 || index_y > 3 || index_y < 0 || index_z > 3 || index_z < 0) 
-			cout<<"Error "<<endl;
+		index_x = min(index_x, bin_size - 1);
+		index_y = min(index_y, bin_size - 1);
+		index_z = min(index_z, bin_size - 1);
+		
 		
 		octree_icp(index_x, index_y, index_z).push_back(model_data.x_coord.at(i));
 		octree_icp(index_x, index_y, index_z).push_back(model_data.y_coord.at(i));
@@ -290,14 +291,14 @@ void cal_closest_points(const column_vector &rt)
 		int index_z_t = 0;
 		
 		//cout<<"Range x value "<<range_x<<endl;
-		index_x_t = floor(((transformed_data.x_coord[i]  - min_x)/range_x)*4);
-		index_y_t = floor(((transformed_data.y_coord[i]  - min_y)/range_y)*4);
-		index_z_t = floor(((transformed_data.z_coord[i]  - min_z)/range_z)*4);
+		index_x_t = floor(((transformed_data.x_coord[i]  - min_x)/range_x)*bin_size);
+		index_y_t = floor(((transformed_data.y_coord[i]  - min_y)/range_y)*bin_size);
+		index_z_t = floor(((transformed_data.z_coord[i]  - min_z)/range_z)*bin_size);
 		
 		// Boundary conditon 
-		index_x_t = max(min(index_x_t, 3),0);
-		index_y_t = max(min(index_y_t, 3),0);
-		index_z_t = max(min(index_z_t, 3),0);
+		index_x_t = max(min(index_x_t, bin_size - 1),0);
+		index_y_t = max(min(index_y_t, bin_size - 1),0);
+		index_z_t = max(min(index_z_t, bin_size - 1),0);
 		
 	
 		for(int p = -1;p < 2; p++)
@@ -306,9 +307,9 @@ void cal_closest_points(const column_vector &rt)
 			{
 				for(int r = -1; r < 2; r++)
 				{
-					bool p_flag = ((p + index_x_t) >= 0) && ((p + index_x_t) <= 3);
-					bool q_flag = ((q + index_y_t) >= 0) && ((q + index_y_t) <= 3);
-					bool r_flag = ((r + index_z_t) >= 0) && ((r + index_z_t) <= 3);
+					bool p_flag = ((p + index_x_t) >= 0) && ((p + index_x_t) <= bin_size - 1);
+					bool q_flag = ((q + index_y_t) >= 0) && ((q + index_y_t) <= bin_size - 1);
+					bool r_flag = ((r + index_z_t) >= 0) && ((r + index_z_t) <= bin_size - 1);
 					if(p_flag && q_flag && r_flag)
 					{
 						for(int l = 0; l < octree_icp(index_x_t + p, index_y_t + q, index_z_t + r).size()/3;l++)
