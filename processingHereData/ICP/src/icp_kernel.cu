@@ -2,8 +2,8 @@
 // Currently working only on performing rotation and translation using cuda 
 
 
-#ifndef _MATRIXMUL_KERNEL_H_
-#define _MATRIXMUL_KERNEL_H_
+#ifndef _ICP_KERNEL_H_
+#define _ICP_KERNEL_H_
 #include <stdio.h>
 #include "ICP_Compute.h"
 #include <iostream>
@@ -28,12 +28,13 @@ __global__  dlib::matrix<double> PerformRotationKernel(dlib::matrix<double> R, d
 	__shared__ float R_s[TILE_WIDTH][TILE_WIDTH];
 	__shared__ float t_s[TILE_WIDTH][TILE_WIDTH];
 	__shared__ float Point_s[TILE_WIDTH][TILE_WIDTH];
-	int R_width = 3;
-	int R_height = 3;
-	int t_width = 1
-	int t_height = 3;
-	int Point_width = 1;
-	int Point_height = 3;
+	
+	// Declaring variables for boundary conditions 
+	
+	int R_width = 3;int R_height = 3;
+	int t_width = 1;int t_height = 3;
+	int Point_width = 1;int Point_height = 3;
+	
 	//Creating matrix to store the result of the transformed point 
 	 dlib::matrix<double> New_Point(3,1);
 	
@@ -53,17 +54,17 @@ __global__  dlib::matrix<double> PerformRotationKernel(dlib::matrix<double> R, d
 		if(row < R_height && (m*TILE_WIDTH + tx) < R_width)   //Checking the boundary conditions for matrix M               
 			R_s[ty][tx] = R(row*M.width + m*TILE_WIDTH + tx);
 		else
-			 R_s[ty][tx] = 0;
+			R_s[ty][tx] = 0;
 	}
 	
-	for (int n = 0; n <= (Point.width/TILE_WIDTH); ++n)
+	for (int n = 0; n <= (Point_width/TILE_WIDTH); ++n)
 	{
 		if((n*TILE_WIDTH + ty) < Point_height && col < Point_width)   //Checking the boundary conditions for matrix Point
 			Point_s[ty][tx] = Point((n*TILE_WIDTH + ty)*Point_width + col);
 		else 
 			Point_s[ty][tx] = 0;
 		if((n*TILE_WIDTH + ty) < t_height && col < t_width)   //Checking the boundary conditions for matrix t
-			t_s[ty][tx] = t((n*TILE_WIDTH + ty)*t.width + col);
+			t_s[ty][tx] = t((n*TILE_WIDTH + ty)*t_width + col);
 		else 
 			t_s[ty][tx] = 0;
 	
@@ -82,7 +83,7 @@ __global__  dlib::matrix<double> PerformRotationKernel(dlib::matrix<double> R, d
 
         }
 	if(row < R_height && col < Point_width)                    //Checking the boundary conditions for matrix new_point
-		 New_Point(row*P.width + col) = result;
+		 New_Point(row*P_width + col) = result;
 
 	 return New_Point;
 
