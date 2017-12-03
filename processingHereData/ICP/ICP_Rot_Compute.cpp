@@ -26,6 +26,7 @@ double min_z = 0;
 double range_x = 0;
 double range_y = 0;
 double range_z = 0;
+int test = 0;
 
 // Define Octree 
 Octree<std::vector<double>> octree_icp(16); 
