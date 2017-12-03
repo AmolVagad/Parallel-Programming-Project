@@ -9,15 +9,13 @@
 #include "dlib/optimization/optimization.h"
 #include "dlib/optimization/find_optimal_parameters_abstract.h"
 #include "dlib/optimization/optimization_bobyqa.h"
-#include "dlib/optimization/find_optimal_parameters.h" 
-#include "octree_code/octree.h"
-
-
+#include "dlib/optimization/find_optimal_parameters.h"
 
 using namespace std;
 using namespace dlib;
 
 
+<<<<<<< HEAD
 
 ///////////Globals///////////////////////
 double min_x =0;
@@ -35,6 +33,8 @@ Octree<std::vector<double>> octree_icp(16);
 
 
 //////////////////////////////////////////////////////////
+=======
+>>>>>>> 5df9ec9
 typedef dlib::matrix<double,0,1> column_vector;
 
 struct point_cloud_data{
@@ -43,15 +43,8 @@ struct point_cloud_data{
 	std::vector <double> y_coord;
 	std::vector <double> z_coord;
 	std::vector <int> index;
-	std::vector <int> bin_index_x;
-	std::vector <int> bin_index_y;
-	std::vector <int> bin_index_z;
 	int size ;	
 };
-
-
-
-
 
 point_cloud_data measurement_data;
 point_cloud_data model_data;
@@ -79,7 +72,7 @@ dlib::matrix<double> PerformRotation(dlib::matrix<double> R,dlib::matrix<double>
 
 void PerformTransformationToAllPoints(dlib::matrix<double> R, dlib::matrix<double> t, point_cloud_data * data, point_cloud_data * transformed_data, int skips)
 {
-	for(int i  = 0; i < data->size; i+= skips)
+	for(int i  = 0; i < data->size; i++)
 	{
 		//cout<<"Print x "<<data->x_coord.at(i)<<endl;
 		dlib::matrix<double,3,1> point, point_new;
@@ -106,6 +99,7 @@ int main()
 	char* pEnd;
 	string x,y,z;
 
+	
 
 	// Reading data from the model map data csv file 
 
@@ -119,55 +113,9 @@ int main()
 		model_data.y_coord.push_back(strtod(y.c_str(),&pEnd));
 		model_data.z_coord.push_back(strtod(z.c_str(),&pEnd));
 		measurement_data.index.push_back(-1);
-		measurement_data.bin_index_x.push_back(-1);
-		measurement_data.bin_index_y.push_back(-1);
-		measurement_data.bin_index_z.push_back(-1);
-	
 	}
-	
-	// Calculating the min and max values of x,y,z
-	double max_x =  *max_element(model_data.x_coord.begin(),model_data.x_coord.end()) ;
-	double max_y =  *max_element(model_data.y_coord.begin(),model_data.y_coord.end()) ;
-	double max_z =  *max_element(model_data.z_coord.begin(),model_data.z_coord.end()) ;
-	double min_x =  *min_element(model_data.x_coord.begin(),model_data.x_coord.end()) ;
-	double min_y =  *min_element(model_data.y_coord.begin(),model_data.y_coord.end()) ;
-	double min_z =  *min_element(model_data.z_coord.begin(),model_data.z_coord.end()) ;
-	
-	// Calculating the range
-	range_x = max_x - min_x; 
-	range_y = max_y - min_y; 
-	range_z = max_z - min_z;
-	
+
 	model_data.size = model_data.x_coord.size();
-	
-	
-	// Storing the data into Octrees 
-	
-	for(int i= 0; i < model_data.size; i++)
-	{
-		int index_x = 0;
-		int index_y = 0;
-		int index_z = 0;
-		
-		index_x = floor(((model_data.x_coord.at(i)  - min_x)/range_x)*16);
-		index_y= floor(((model_data.y_coord.at(i)  - min_y)/range_y)*16);
-		index_z = floor(((model_data.z_coord.at(i)  - min_z)/range_z)*16);
-		
-		// Boundary conditon 
-		index_x = min(index_x, 15);
-		index_y = min(index_y, 15);
-		index_z = min(index_z, 15);
-		
-		
-		octree_icp(index_x, index_y, index_z).push_back(model_data.x_coord.at(i));
-		octree_icp(index_x, index_y, index_z).push_back(model_data.y_coord.at(i));
-		octree_icp(index_x, index_y, index_z).push_back(model_data.z_coord.at(i));
-		
-	}
-		
-	cout<<"Octree at 0 "<<octree_icp(0,0,0)[0]<<endl;		
-		
-	
 
 	//Rotational function test
 	double theta = 0.03;
@@ -206,7 +154,7 @@ int main()
 	double final_error = 0;
 	// time measurement variables 
 
-	double cpu_starttime , cpu_endtime;
+	int cpu_starttime , cpu_endtime;
 	for(int i = 0; i<20; i++)
 	{
 		cout<<"iteration #: "<<i<<endl;
@@ -220,7 +168,7 @@ int main()
 		cout<<"current error: "<<final_error<<endl;
 		
 	}
-	//cout<<"Error after optimization "<<final_error<<endl;
+	cout<<"Error after optimization "<<final_error<<endl;
 
 	
 	
@@ -245,9 +193,7 @@ void cal_closest_points(const column_vector &rt)
 	float distance = 0.0;
 	int best_index ;
 	float closest_distance;
-	int best_bin_index_x;
-	int best_bin_index_y;
-	int best_bin_index_z;
+
 
 	PerformTransformationToAllPoints(R, t, &measurement_data, &transformed_data,1);
 
@@ -258,71 +204,32 @@ void cal_closest_points(const column_vector &rt)
 	{
 		best_index = 0;
 		closest_distance = 65535;
-		best_bin_index_x = 0;
-		best_bin_index_y = 0;
-		best_bin_index_z = 0;
-		int index_x_t= 0;
-		int index_y_t = 0;
-		int index_z_t = 0;
-		
-		
-		index_x_t = floor(((transformed_data.x_coord[i]  - min_x)/range_x)*16);
-		index_y_t = floor(((transformed_data.y_coord[i]  - min_y)/range_y)*16);
-		index_z_t = floor(((transformed_data.z_coord[i]  - min_z)/range_z)*16);
-		
-		// Boundary conditon 
-		index_x_t = max(min(index_x_t, 15),0);
-		index_y_t = max(min(index_y_t, 15),0);
-		index_z_t = max(min(index_z_t, 15),0);
-		
-		
-		for(int p = -1; p + index_x_t >0 && p + index_x_t < 15 && p < 2; p++)
+
+		for(int j = 0; j < model_data.size; j++)
 		{
-			for(int q = -1; q + index_y_t >0 && q + index_y_t < 15 && q < 2; q++)
-			{
-				for(int r = -1; r + index_z_t >0 && r + index_z_t < 15 && r < 2; r++)
-				{
-					for(int l = 0; l < octree_icp(index_x_t + p, index_y_t + q, index_z_t + r).size()/3;l++)
-					{
-						cout<<"Test"<<endl;
-						distance = sqrt(pow((transformed_data.x_coord[i] - octree_icp(index_x_t + p, index_y_t + q, index_z_t + r)[3*l]),2) + pow((transformed_data.y_coord[i] - octree_icp(index_x_t + p, index_y_t + q, index_z_t + r)[3*l+1]),2) + pow((transformed_data.z_coord[i] - octree_icp(index_x_t + p, index_y_t + q, index_z_t + r)[3*l + 2]),2));
 			
-						if(distance < closest_distance)
-						{
-							closest_distance = distance;
-							best_index = l;
-							best_bin_index_x = index_x_t + p;
-							best_bin_index_y = index_y_t + q;
-							best_bin_index_z = index_z_t + r;	
-						}
-					}
-				}
+			distance = sqrt(pow((transformed_data.x_coord.at(i) - model_data.x_coord.at(j)),2) + pow((transformed_data.y_coord.at(i) - model_data.y_coord.at(j)),2) + pow((transformed_data.z_coord.at(i) - model_data.z_coord.at(j)),2));
+			
+			if(distance < closest_distance)
+			{
+				closest_distance = distance;
+				best_index = j;
 			}
-		}
-								
-		measurement_data.index[i] = best_index;
-		measurement_data.bin_index_x[i] = best_bin_index_x;
-		measurement_data.bin_index_y[i] = best_bin_index_y;
-		measurement_data.bin_index_z[i] = best_bin_index_z;						
-		if(i == 0)
-		{
-			cout<<best_bin_index_x<<endl;
-			cout<<best_bin_index_y<<endl;
-			cout<<best_bin_index_z<<endl;
-		}
 		
 
+		}
+		measurement_data.index[i] = best_index;
 		
 	}
-	std::cout<<"numPoints Updated "<<numPointsUpdated<<endl;
-	//cout<<"Octree at 0 "<<octree_icp(0,0,0)[0]<<endl;
+	
+
 }
 
 
 
 double findTotalErrorInCloud(const column_vector &rt)
 {
-	iterations++;
+	
 	double icp_error = 0.0;
 	point_cloud_data transformed_data;
 	
@@ -336,45 +243,19 @@ double findTotalErrorInCloud(const column_vector &rt)
 	t = rt(1), rt(2), rt(3);
 	//cout<<"Check measurement data element "<<measurement_data.x_coord.at(0)<<endl;
 	PerformTransformationToAllPoints(R, t, &measurement_data, &transformed_data,1);
-	cout<<"Measurement data size "<<measurement_data.size<<endl;
+	//cout<<"Check 1"<<endl;
 	double true_map_error = 0.0;
-
 	for(int i = 0; i < measurement_data.size; i++)
 	{
-		cout<<"Check 2"<<endl;
-		int j = measurement_data.index[i];
-		int x_Idx = measurement_data.bin_index_x[i];
-		int y_Idx = measurement_data.bin_index_y[i];
-		int z_Idx = measurement_data.bin_index_z[i];
-		cout<<"x IDX "<<x_Idx<<endl;
-		cout<<"y IDX "<<y_Idx<<endl;
-		cout<<"z IDX "<<z_Idx<<endl;
-		cout<<"Value of j  "<<j<<endl;
+		//cout<<"Value of i "<<i<<endl;
+		int j = measurement_data.index.at(i);
 
+		icp_error +=sqrt(pow((transformed_data.x_coord.at(i) - model_data.x_coord.at(j)),2) + pow((transformed_data.y_coord.at(i) - model_data.y_coord.at(j)),2) + pow((transformed_data.z_coord.at(i) - model_data.z_coord.at(j)),2)); 
 
-		cout<<"Octree check "<<octree_icp(x_Idx, y_Idx, z_Idx)[3*j]<<endl;
-		//icp_error +=sqrt(pow((transformed_data.x_coord[i] - octree_icp(x_Idx, y_Idx, z_Idx)[3*j]),2) + pow((transformed_data.y_coord[i] - octree_icp(x_Idx, y_Idx, z_Idx)[3*j + 1]),2) + pow((transformed_data.z_coord[i] - octree_icp(x_Idx, y_Idx, z_Idx)[3*j + 2]),2)); 
-
-		//icp_error += transformed_data.x_coord[i] + transformed_data.y_coord[i] + transformed_data.z_coord[i];
-		cout<<"Check 3"<<endl;
 		//true_map_error +=sqrt(pow((transformed_data.x_coord.at(i) - model_data.x_coord.at(i)),2) + pow((transformed_data.y_coord.at(i) - model_data.y_coord.at(i)),2) + pow((transformed_data.z_coord.at(i) - model_data.z_coord.at(i)),2));
-		cout<<"Value of i "<<i<<endl;
+
 	}
-	
 
-	//do//uble sign_object_localizer = 0.0;
-
-	//sign_object_localizer +=  sqrt(pow((transformed_data.x_coord.at(0) - model_data.x_coord.at(0)),2) + pow((transformed_data.y_coord.at(0) - model_data.y_coord.at(0)),2) + pow((transformed_data.z_coord.at(0) - model_data.z_coord.at(0)),2));
-
-	//sign_object_localizer += sqrt(pow((transformed_data.x_coord.at(1*skips) - model_data.x_coord.at(1*skips)),2) + pow((transformed_data.y_coord.at(1*skips) - model_data.y_coord.at(1*skips)),2) + pow((transformed_data.z_coord.at(1*skips) - model_data.z_coord.at(1*skips)),2));
-
-	//sign_object_localizer += sqrt(pow((transformed_data.x_coord.at(2*skips) - model_data.x_coord.at(2*skips)),2) + pow((transformed_data.y_coord.at(2*skips) - model_data.y_coord.at(2*skips)),2) + pow((transformed_data.z_coord.at(2*skips) - model_data.z_coord.at(2*skips)),2));
-
-	//sign_object_localizer += sqrt(pow((transformed_data.x_coord.at(3*skips) - model_data.x_coord.at(3*skips)),2) + pow((transformed_data.y_coord.at(3*skips) - model_data.y_coord.at(3*skips)),2) + pow((transformed_data.z_coord.at(3*skips) - model_data.z_coord.at(3*skips)),2));
-
-	//sign_object_localizer += sqrt(pow((transformed_data.x_coord.at(4*skips) - model_data.x_coord.at(4*skips)),2) + pow((transformed_data.y_coord.at(4*skips) - model_data.y_coord.at(4*skips)),2) + pow((transformed_data.z_coord.at(4*skips) - model_data.z_coord.at(4*skips)),2));
-
-	//double total_error = (sign_object_localizer*measurement_data.size*0.5) + 1*icp_error;
 
 	//cout<<"current error: "<<total_error<<endl;
 	//cout<<"final map error: "<<true_map_error<<endl;
