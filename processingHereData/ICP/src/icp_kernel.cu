@@ -22,6 +22,8 @@
 #include "globals.h"
 
 
+#define TILE_WIDTH 4 
+
 __global__  dlib::matrix<double> PerformRotationKernel(dlib::matrix<double> R, dlib::matrix<double> t, dlib::matrix<double> Point)
 {
 	// Create Matrices in the shared memory 
@@ -85,7 +87,7 @@ __global__  dlib::matrix<double> PerformRotationKernel(dlib::matrix<double> R, d
 	if(row < R_height && col < Point_width)                    //Checking the boundary conditions for matrix new_point
 		 New_Point(row*P_width + col) = result;
 
-	 return New_Point;
+	return New_Point;
 
 }
 
