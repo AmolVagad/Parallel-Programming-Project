@@ -20,33 +20,63 @@
 #include "globals.h"
 #include "icp_kernel.cu"
 extern "C"
-
+using namespace std;
 ///// For initial testing purposes carrying out rotation and translation operation on cuda//////////////////
+
+
+
+
+
+
+// Point cloud data structure 
+
+
+//////////////////////////////////////////////////////////
+//Matrix column_vector;
+//column_vector.height = 3;
+//column_vector.width = 1;
+
+struct point_cloud_data{
+
+	std::vector <double> x_coord;
+	std::vector <double> y_coord;
+	std::vector <double> z_coord;
+	std::vector <int> index;
+	std::vector <int> bin_index_x;
+	std::vector <int> bin_index_y;
+	std::vector <int> bin_index_z;
+	int size ;	
+};
+
+// Creating variables to store the measurement and model data
+
+point_cloud_data measurement_data;
+point_cloud_data model_data;
+
+int bin_size = 4;
+
+
+
+
 
 
 
 // Function to carry out Rotation of given point on the device 
 
-dlib::matrix<double> PerformRotationOnDevice(dlib::matrix<double> R_h,dlib::matrix<double> t_h, dlib::matrix<double> Point_h,  dlib::matrix<double> Rotated_Point_h)
+double* PerformRotationOnDevice(const Matrix R_h,const Matrix t_h, const Matrix Point_h, Matrix Rotated_Point_h)
 {
 	int n = 3;
 	int size = n*sizeof(double);
 
 	// Declare the device variables 
 	
-	dlib::matrix<double> R_d;
-	dlib::matrix<double> t_d;
-	dlib::matrix<double> Point_d;
-	dlib::matrix<double> Rotated_Point_d;
-	
-	// Declare the matrix to store the retured result 
-	dlib::matrix<double> New_Point_h(3,1);
+	Matrix R_d, t_d,Point_d, Rotated_Point_d;
 	
 	// Allocate memory on the device
 	
-	cudaMalloc((void **)&R_d,size));
-	cudaMalloc((void **)&t_d,size));
-	cudaMalloc((void **)&Point_d,size));
+	cudaMalloc((void **)&R_d,size);
+	cudaMalloc((void **)&t_d,size);
+	cudaMalloc((void **)&Point_d,size);
 	
 	// Copy from host to device 
 	
@@ -56,20 +86,20 @@ dlib::matrix<double> PerformRotationOnDevice(dlib::matrix<double> R_h,dlib::matr
 	
 	
 	// Allocate device memory for result 
-	cudaMalloc((void **)&Rotated_Point_d,size));
+	cudaMalloc((void **)&Rotated_Point_d,size);
 	
 	
 	// Kernel Call 
 	 
  // Setup the execution configuration
-    	int blocks_w = N.width/TILE_WIDTH ;
-    	int blocks_h = M.height /TILE_WIDTH;
+    	int blocks_w = R_h.width/TILE_WIDTH ;
+    	int blocks_h = Point_h.height /TILE_WIDTH;
     
    
-	if(M.width % TILE_WIDTH)
+	if(t_h.width % TILE_WIDTH)
 		blocks_w ++;
 
-	if(M.height % TILE_WIDTH)
+	if(R_h.height % TILE_WIDTH)
 		blocks_h ++;
 		         
 	dim3 dimGrid(blocks_w, blocks_h, 1);
@@ -78,12 +108,12 @@ dlib::matrix<double> PerformRotationOnDevice(dlib::matrix<double> R_h,dlib::matr
 
     // Launch the device computation threads!
 
-     PerformRotationKernel<<<dimGrid,dimBlock>>>(P_d, t_d, Point_d, New_Point_d);
+     PerformRotationKernel<<<dimGrid,dimBlock>>>(R_d, t_d, Point_d, Rotated_Point_d);
 		
 	// Transfer Rotated Point from device to host
      cudaMemcpy(Rotated_Point_h, Rotated_Point_d, size, cudaMemcpyDeviceToHost);
        // Free device memory for all
-     cudaFree(P_d); cudaFree(t_d); cudaFree (Point_d);cudaFree (Rotated_Point_d);
+     cudaFree(R_d); cudaFree(t_d); cudaFree (Point_d);cudaFree (Rotated_Point_d);
      
      return Rotated_Point_h;	
 	
@@ -96,16 +126,18 @@ dlib::matrix<double> PerformRotationOnDevice(dlib::matrix<double> R_h,dlib::matr
 
 // Function that calls transformation function and stores the transformed values 
 
-void PerformTransformationToAllPoints(dlib::matrix<double> R, dlib::matrix<double> t, point_cloud_data * data, point_cloud_data * transformed_data, int skips)
+void PerformTransformationToAllPoints(Matrix R,Matrix t, point_cloud_data * data, point_cloud_data * transformed_data, int skips)
 {
 	for(int i  = 0; i < data->size; i++)
 	{
-		dlib::matrix<double,3,1> point, point_new;
-		point = data->x_coord.at(i), data->y_coord.at(i), data->z_coord.at(i);
-		point_new = PerformRotation(R, t, point);
-		transformed_data->x_coord.push_back(point_new(0));
-		transformed_data->y_coord.push_back(point_new(1));
-		transformed_data->z_coord.push_back(point_new(2));		 
+		Matrix point, rotated_point;
+		point.height = rotated_point.height =3;
+		point.width = rotated_point.width = 1;
+		point = {data->x_coord.at(i), data->y_coord.at(i), data->z_coord.at(i)};
+		rotated_point.elements =PerformRotationOnDevice(R, t, point, rotated_point);
+		transformed_data->x_coord.push_back(rotated_point.elements[0]);
+		transformed_data->y_coord.push_back(rotated_point.elements[1]);
+		transformed_data->z_coord.push_back(rotated_point.elements[2]);		 
 	}
 	transformed_data->size = transformed_data->x_coord.size();
 	
@@ -208,25 +240,31 @@ int main()
 	double point_x = 0.003;
 	double point_y = 0.005;
 	double point_z = 0.0;
-	dlib::matrix<double> R(3,3);
-	dlib::matrix<double> t(3,1);
+	Matrix R;
+	Matrix t;
+	R.width = 3;
+	R.height = 3;
+	t.width = 1;
+	t.height = 3;
 
-	R = cos(theta), -sin(theta), 0,
+	R.elements = {cos(theta), -sin(theta), 0,
 	    sin(theta), cos(theta), 0,
-	    0, 0, 1;
+	    0, 0, 1};
 
-	t = point_x, point_y, point_z;
+	t.elements[0] = point_x;
+	t.elements[1]= point_y;
+	t.elements[2] = point_z;
 	
 
 	// Generate mesasurement datra by rorating the model data
 	PerformTransformationToAllPoints(R, t, &model_data, &measurement_data,1);
 
-
+/*
 	//Calling closest point.
-	column_vector rt(4), rt_lower(4), rt_upper(4);
+	column_vector ={ rt(4), rt_lower(4), rt_upper(4)};
 
 	rt = -theta, -cos(theta)*point_x - sin(theta)*point_y, sin(theta)*point_x - cos(theta)*point_y, point_z;
-	cout<<"rt: "<<rt<<endl;
+	std::cout<<"rt: "<<rt<<endl;
 
 	rt = -0.0,0.0,0.0,0.0;
 	rt_lower = -1.0, -1.0,-1.0,-1.0;
@@ -236,7 +274,7 @@ int main()
 	double final_error = 0;
 	// time measurement variables 
 
-/*
+
 	double cpu_starttime , cpu_endtime;
 	for(int i = 0; i<20; i++)
 	{

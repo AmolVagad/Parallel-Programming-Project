@@ -24,20 +24,13 @@
 
 #define TILE_WIDTH 4 
 
-__global__  void PerformRotationKernel(dlib::matrix<double> R, dlib::matrix<double> t, dlib::matrix<double> Point,dlib::matrix<double> New_Point)
+__global__  void PerformRotationKernel(Matrix R, Matrix t, Matrix Point,Matrix New_Point)
 {
 	// Create Matrices in the shared memory 
 	__shared__ float R_s[TILE_WIDTH][TILE_WIDTH];
 	__shared__ float t_s[TILE_WIDTH][TILE_WIDTH];
 	__shared__ float Point_s[TILE_WIDTH][TILE_WIDTH];
 	
-	// Declaring variables for boundary conditions 
-	
-	int R_width = 3;int R_height = 3;
-	int t_width = 1;int t_height = 3;
-	int Point_width = 1;int Point_height = 3;
-	
-
 	// Thread allocation 
 	int bx = blockIdx.x; int by = blockIdx.y;
 	int tx = threadIdx.x ; int ty = threadIdx.y;
@@ -49,22 +42,22 @@ __global__  void PerformRotationKernel(dlib::matrix<double> R, dlib::matrix<doub
 
 	//Loading R, t and point into the shared memory 
 	 
-	for ( int m = 0; m <= (R_width /TILE_WIDTH)  ; ++m)
+	for ( int m = 0; m <= (R.width /TILE_WIDTH)  ; ++m)
 	{
-		if(row < R_height && (m*TILE_WIDTH + tx) < R_width)   //Checking the boundary conditions for matrix M               
-			R_s[ty][tx] = R(row*R_width + m*TILE_WIDTH + tx);
+		if(row < R.height && (m*TILE_WIDTH + tx) < R.width)   //Checking the boundary conditions for matrix M               
+			R_s[ty][tx] = R.elements[row*R.width + m*TILE_WIDTH + tx];
 		else
 			R_s[ty][tx] = 0;
 	}
 	
-	for (int n = 0; n <= (Point_width/TILE_WIDTH); ++n)
+	for (int n = 0; n <= (Point.width/TILE_WIDTH); ++n)
 	{
-		if((n*TILE_WIDTH + ty) < Point_height && col < Point_width)   //Checking the boundary conditions for matrix Point
-			Point_s[ty][tx] = Point((n*TILE_WIDTH + ty)*Point_width + col);
+		if((n*TILE_WIDTH + ty) < Point.height && col < Point.width)   //Checking the boundary conditions for matrix Point
+			Point_s[ty][tx] = Point.elements[(n*TILE_WIDTH + ty)*Point.width + col];
 		else 
 			Point_s[ty][tx] = 0;
-		if((n*TILE_WIDTH + ty) < t_height && col < t_width)   //Checking the boundary conditions for matrix t
-			t_s[ty][tx] = t((n*TILE_WIDTH + ty)*t_width + col);
+		if((n*TILE_WIDTH + ty) < t.height && col < t.width)   //Checking the boundary conditions for matrix t
+			t_s[ty][tx] = t.elements[(n*TILE_WIDTH + ty)*t.width + col];
 		else 
 			t_s[ty][tx] = 0;
 	
@@ -82,8 +75,8 @@ __global__  void PerformRotationKernel(dlib::matrix<double> R, dlib::matrix<doub
 
 
         
-	if(row < R_height && col < Point_width)                    //Checking the boundary conditions for matrix new_point
-		 New_Point(row*Point_width + col) = result;
+	if(row < R.height && col < Point.width)                    //Checking the boundary conditions for matrix new_point
+		 New_Point.elements[row*Point.width + col] = result;
 
 	
 
