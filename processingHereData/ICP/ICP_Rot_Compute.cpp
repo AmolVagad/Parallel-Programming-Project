@@ -26,7 +26,7 @@ double min_z = 0;
 double range_x = 0;
 double range_y = 0;
 double range_z = 0;
-int bin_size = 4;
+int bin_size = 16;
 
 
 // Define Octree 
@@ -300,42 +300,99 @@ void cal_closest_points(const column_vector &rt)
 		index_y_t = max(min(index_y_t, bin_size - 1),0);
 		index_z_t = max(min(index_z_t, bin_size - 1),0);
 		
-	
-		for(int p = -1;p < 2; p++)
+		
+		int p_q_r[3] = {0,0,0};
+		int non_empty_bin = 0;
+		int max_bin_offset = 2;
+//*****************Mandatory search in adjacent bins*******************************************************************		
+		for(p_q_r[0] = -1; p_q_r[0] < max_bin_offset; p_q_r[0]++)
 		{
-			for(int q = -1; q < 2; q++)
+			for(p_q_r[1] = -1; p_q_r[1] < max_bin_offset; p_q_r[1]++)
 			{
-				for(int r = -1; r < 2; r++)
+				for(p_q_r[2] = -1; p_q_r[2] < max_bin_offset; p_q_r[2]++)
 				{
-					bool p_flag = ((p + index_x_t) >= 0) && ((p + index_x_t) <= bin_size - 1);
-					bool q_flag = ((q + index_y_t) >= 0) && ((q + index_y_t) <= bin_size - 1);
-					bool r_flag = ((r + index_z_t) >= 0) && ((r + index_z_t) <= bin_size - 1);
+					bool p_flag = ((p_q_r[0] + index_x_t) >= 0) && ((p_q_r[0] + index_x_t) <= bin_size - 1);
+					bool q_flag = ((p_q_r[1] + index_y_t) >= 0) && ((p_q_r[1] + index_y_t) <= bin_size - 1);
+					bool r_flag = ((p_q_r[2] + index_z_t) >= 0) && ((p_q_r[2] + index_z_t) <= bin_size - 1);
 					if(p_flag && q_flag && r_flag)
 					{
-						for(int l = 0; l < octree_icp(index_x_t + p, index_y_t + q, index_z_t + r).size()/3;l++)
+						if(octree_icp(index_x_t + p_q_r[0], index_y_t + p_q_r[1], index_z_t + p_q_r[2]).size()/3 > 0)
+							non_empty_bin++;
+						for(int l = 0; l < octree_icp(index_x_t + p_q_r[0], index_y_t + p_q_r[1], index_z_t + p_q_r[2]).size()/3;l++)
 						{
-							
-							distance = sqrt(pow((transformed_data.x_coord[i] - octree_icp(index_x_t + p, index_y_t + q, index_z_t + r)[3*l]),2) + pow((transformed_data.y_coord[i] - octree_icp(index_x_t + p, index_y_t + q, index_z_t + r)[3*l+1]),2) + pow((transformed_data.z_coord[i] - octree_icp(index_x_t + p, index_y_t + q, index_z_t + r)[3*l + 2]),2));
-			
+					
+							distance = sqrt(pow((transformed_data.x_coord[i] - octree_icp(index_x_t + p_q_r[0], index_y_t + p_q_r[1], index_z_t + p_q_r[2])[3*l]),2) + pow((transformed_data.y_coord[i] - octree_icp(index_x_t + p_q_r[0], index_y_t + p_q_r[1], index_z_t + p_q_r[2])[3*l+1]),2) + pow((transformed_data.z_coord[i] - octree_icp(index_x_t + p_q_r[0], index_y_t + p_q_r[1], index_z_t + p_q_r[2])[3*l + 2]),2));
+	
 							if(distance < closest_distance)
 							{
 								closest_distance = distance;
 								best_index = l;
-								best_bin_index_x = index_x_t + p;
-								best_bin_index_y = index_y_t + q;
-								best_bin_index_z = index_z_t + r;	
+								best_bin_index_x = index_x_t + p_q_r[0];
+								best_bin_index_y = index_y_t + p_q_r[1];
+								best_bin_index_z = index_z_t + p_q_r[2];	
 							}
 						}
 					}
 				}
 			}
+			
 		}
-								
-		measurement_data.index[i] = best_index;
-		measurement_data.bin_index_x[i] = best_bin_index_x;
-		measurement_data.bin_index_y[i] = best_bin_index_y;
-		measurement_data.bin_index_z[i] = best_bin_index_z;
-								
+//*************************************************************************************************************
+		
+		while(non_empty_bin == 0)
+		{
+			//cout<<"Entered this if"<<endl;
+			max_bin_offset = max_bin_offset + 1;
+			
+			for(int a = 0; a < 6; a++)
+			{
+				p_q_r[a%3] = pow(-1,a)*(max_bin_offset - 1);
+				for(int b = -max_bin_offset + 1; b < max_bin_offset; b++)
+				{
+					p_q_r[(a+1)%3] = b;
+					for(int c = -max_bin_offset + 1; c < max_bin_offset; c++)
+					{
+						p_q_r[(a+2)%3] = c;
+						bool p_flag = ((p_q_r[0] + index_x_t) >= 0) && ((p_q_r[0] + index_x_t) <= bin_size - 1);
+						bool q_flag = ((p_q_r[1] + index_y_t) >= 0) && ((p_q_r[1] + index_y_t) <= bin_size - 1);
+						bool r_flag = ((p_q_r[2] + index_z_t) >= 0) && ((p_q_r[2] + index_z_t) <= bin_size - 1);
+						if(p_flag && q_flag && r_flag)
+						{
+							if(octree_icp(index_x_t + p_q_r[0], index_y_t + p_q_r[1], index_z_t + p_q_r[2]).size()/3 > 0)
+								non_empty_bin++;
+							for(int l = 0; l < octree_icp(index_x_t + p_q_r[0], index_y_t + p_q_r[1], index_z_t + p_q_r[2]).size()/3;l++)
+							{
+					
+								distance = sqrt(pow((transformed_data.x_coord[i] - octree_icp(index_x_t + p_q_r[0], index_y_t + p_q_r[1], index_z_t + p_q_r[2])[3*l]),2) + pow((transformed_data.y_coord[i] - octree_icp(index_x_t + p_q_r[0], index_y_t + p_q_r[1], index_z_t + p_q_r[2])[3*l+1]),2) + pow((transformed_data.z_coord[i] - octree_icp(index_x_t + p_q_r[0], index_y_t + p_q_r[1], index_z_t + p_q_r[2])[3*l + 2]),2));
+	
+								if(distance < closest_distance)
+								{
+									closest_distance = distance;
+									best_index = l;
+									best_bin_index_x = index_x_t + p_q_r[0];
+									best_bin_index_y = index_y_t + p_q_r[1];
+									best_bin_index_z = index_z_t + p_q_r[2];	
+								}
+							}
+						}
+					}
+				}
+			}		
+
+
+
+
+
+		}	
+
+
+		if(non_empty_bin > 0)
+		{						
+			measurement_data.index[i] = best_index;
+			measurement_data.bin_index_x[i] = best_bin_index_x;
+			measurement_data.bin_index_y[i] = best_bin_index_y;
+			measurement_data.bin_index_z[i] = best_bin_index_z;
+		}						
 		
 
 		
