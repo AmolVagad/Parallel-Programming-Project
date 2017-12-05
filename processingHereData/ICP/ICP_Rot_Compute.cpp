@@ -26,7 +26,7 @@ double min_z = 0;
 double range_x = 0;
 double range_y = 0;
 double range_z = 0;
-int bin_size = 16;
+int bin_size = 32;
 
 
 // Define Octree 
@@ -71,7 +71,7 @@ double findTotalErrorInCloud(const column_vector &rt);
 
 
 
-dlib::matrix<double> PerformRotation(dlib::matrix<double> R,dlib::matrix<double> t, dlib::matrix<double> point)
+dlib::matrix<double> PerformRotation(dlib::matrix<double> R,dlib::matrix<double> t, dlib::matrix<double> point)//Parallelization using Matrix Multiplication
 {
 	dlib::matrix<double> point_new(3,1);
 	point_new = R*point + t;
@@ -238,9 +238,11 @@ int main()
 		cpu_starttime = clock();
 		cal_closest_points(rt);
 		cpu_endtime = clock();
-		cout<<"The time taken for calculation = "<<((cpu_endtime - cpu_starttime)/CLOCKS_PER_SEC)<<endl;
-
+		cout<<"The time taken for calculation of closest point = "<<((cpu_endtime - cpu_starttime)/CLOCKS_PER_SEC)<<endl;
+		cpu_starttime = clock();
 		final_error = find_optimal_parameters(0.01, 0.000000001,100000, rt, rt_lower, rt_upper,findTotalErrorInCloud);
+		cpu_endtime = clock();
+		cout<<"The time taken for calculation of optimum value= "<<((cpu_endtime - cpu_starttime)/CLOCKS_PER_SEC)<<endl;
 		cout<<"Rt parameters "<<rt<<endl;
 		cout<<"current error: "<<final_error<<endl;
 		
@@ -254,7 +256,7 @@ int main()
 	return 0;
 }
 
-void cal_closest_points(const column_vector &rt)
+void cal_closest_points(const column_vector &rt) //Parallelization: Pass each data element to an individual thread and calculate closest point
 {
 
 	point_cloud_data transformed_data;
@@ -338,7 +340,7 @@ void cal_closest_points(const column_vector &rt)
 			
 		}
 //*************************************************************************************************************
-		
+//****************************** This section moves out to check the outer bins for closest point**************		
 		while(non_empty_bin == 0)
 		{
 			//cout<<"Entered this if"<<endl;
@@ -384,7 +386,7 @@ void cal_closest_points(const column_vector &rt)
 
 
 		}	
-
+//*************************************************************************************************************************************
 
 		if(non_empty_bin > 0)
 		{						
@@ -403,7 +405,7 @@ void cal_closest_points(const column_vector &rt)
 
 
 
-double findTotalErrorInCloud(const column_vector &rt)
+double findTotalErrorInCloud(const column_vector &rt) //This function can be written parallelly using Atomic Add operation
 {
 	iterations++;
 	double icp_error = 0.0;
