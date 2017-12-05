@@ -25,35 +25,25 @@ using namespace std;
 
 
 
-
-
-
-// Point cloud data structure 
-
-
-//////////////////////////////////////////////////////////
-//Matrix column_vector;
-//column_vector.height = 3;
-//column_vector.width = 1;
-
-struct point_cloud_data{
-
-	std::vector <double> x_coord;
-	std::vector <double> y_coord;
-	std::vector <double> z_coord;
-	std::vector <int> index;
-	std::vector <int> bin_index_x;
-	std::vector <int> bin_index_y;
-	std::vector <int> bin_index_z;
-	int size ;	
-};
-
 // Creating variables to store the measurement and model data
 
 point_cloud_data measurement_data;
 point_cloud_data model_data;
 
 int bin_size = 4;
+
+double min_x =0;
+double min_y = 0;
+double min_z = 0;
+double range_x = 0;
+double range_y = 0;
+double range_z = 0;
+
+
+
+// Define Octree 
+Octree<std::vector<double>> octree_icp(bin_size); 
+
 
 
 
@@ -65,8 +55,9 @@ int bin_size = 4;
 
 double* PerformRotationOnDevice(const Matrix R_h,const Matrix t_h, const Matrix Point_h, Matrix Rotated_Point_h)
 {
-	int n = 3;
-	int size = n*sizeof(double);
+	
+	int size_1 = R_h.width*R_h.height*sizeof(double);
+	int size_2 = t_h.width*t_h.height*sizeof(double);
 
 	// Declare the device variables 
 	
@@ -74,19 +65,19 @@ double* PerformRotationOnDevice(const Matrix R_h,const Matrix t_h, const Matrix 
 	
 	// Allocate memory on the device
 	
-	cudaMalloc((void **)&R_d,size);
-	cudaMalloc((void **)&t_d,size);
-	cudaMalloc((void **)&Point_d,size);
+	cudaMalloc((void **)&R_d.elements,size_1);
+	cudaMalloc((void **)&t_d.elements,size_2);
+	cudaMalloc((void **)&Point_d.elements,size_2);
 	
 	// Copy from host to device 
 	
-	cudaMemcpy(R_d,R_h,size, cudaMemcpyHostToDevice);
-	cudaMemcpy(t_d,t_h,size, cudaMemcpyHostToDevice);
-	cudaMemcpy(Point_d,Point_h,size, cudaMemcpyHostToDevice);
+	cudaMemcpy(R_d.elements,R_h.elements,size_1, cudaMemcpyHostToDevice);
+	cudaMemcpy(t_d.elements,t_h.elements,size_2, cudaMemcpyHostToDevice);
+	cudaMemcpy(Point_d.elements,Point_h.elements,size_2, cudaMemcpyHostToDevice);
 	
 	
 	// Allocate device memory for result 
-	cudaMalloc((void **)&Rotated_Point_d,size);
+	cudaMalloc((void **)&Rotated_Point_d.elements,size_2);
 	
 	
 	// Kernel Call 
@@ -111,11 +102,11 @@ double* PerformRotationOnDevice(const Matrix R_h,const Matrix t_h, const Matrix 
      PerformRotationKernel<<<dimGrid,dimBlock>>>(R_d, t_d, Point_d, Rotated_Point_d);
 		
 	// Transfer Rotated Point from device to host
-     cudaMemcpy(Rotated_Point_h, Rotated_Point_d, size, cudaMemcpyDeviceToHost);
+     cudaMemcpy(Rotated_Point_h.elements, Rotated_Point_d.elements, size_2, cudaMemcpyDeviceToHost);
        // Free device memory for all
-     cudaFree(R_d); cudaFree(t_d); cudaFree (Point_d);cudaFree (Rotated_Point_d);
+     cudaFree(R_d.elements); cudaFree(t_d.elements); cudaFree (Point_d.elements);cudaFree (Rotated_Point_d.elements);
      
-     return Rotated_Point_h;	
+     return Rotated_Point_h.elements;	
 	
 }
 
@@ -133,7 +124,9 @@ void PerformTransformationToAllPoints(Matrix R,Matrix t, point_cloud_data * data
 		Matrix point, rotated_point;
 		point.height = rotated_point.height =3;
 		point.width = rotated_point.width = 1;
-		point = {data->x_coord.at(i), data->y_coord.at(i), data->z_coord.at(i)};
+		point.elements[0] = data->x_coord.at(i);
+		point.elements[1] = data->y_coord.at(i);
+		point.elements[2] = data->z_coord.at(i);
 		rotated_point.elements =PerformRotationOnDevice(R, t, point, rotated_point);
 		transformed_data->x_coord.push_back(rotated_point.elements[0]);
 		transformed_data->y_coord.push_back(rotated_point.elements[1]);
@@ -247,9 +240,9 @@ int main()
 	t.width = 1;
 	t.height = 3;
 
-	R.elements = {cos(theta), -sin(theta), 0,
-	    sin(theta), cos(theta), 0,
-	    0, 0, 1};
+	R.elements[0] = cos(theta);R.elements[1]= -sin(theta); R.elements[2]= 0;
+	R.elements[3] =sin(theta);  R.elements[4]=cos(theta); R.elements[5]= 0;
+	R.elements[6] = 0; R.elements[7]= 0; R.elements[8]= 1;
 
 	t.elements[0] = point_x;
 	t.elements[1]= point_y;

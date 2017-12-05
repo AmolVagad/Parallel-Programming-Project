@@ -28,5 +28,26 @@ typedef struct {
     double* elements;
 } Matrix;
 
+
+
+
+
+// Point cloud data structure 
+
+struct point_cloud_data{
+
+	std::vector <double> x_coord;
+	std::vector <double> y_coord;
+	std::vector <double> z_coord;
+	std::vector <int> index;
+	std::vector <int> bin_index_x;
+	std::vector <int> bin_index_y;
+	std::vector <int> bin_index_z;
+	int size ;	
+};
+
+
+
+
 #endif
  
