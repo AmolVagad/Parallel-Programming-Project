@@ -44,7 +44,8 @@ double range_z = 0;
 // Define Octree 
 Octree<std::vector<double>> octree_icp(bin_size); 
 
-
+// Define the column vector 
+typedef dlib::matrix<double,0,1> column_vector;
 
 
 
@@ -229,7 +230,7 @@ int main()
 	
 
 	
-	//cout<<"Octree at 0 "<<octree_icp(0,0,0)[0]<<endl;		
+			
 		
 	
 
@@ -263,9 +264,9 @@ int main()
 
 	
 
-/*
+
 	//Calling closest point.
-	column_vector ={ rt(4), rt_lower(4), rt_upper(4)};
+	column_vector  rt(4), rt_lower(4), rt_upper(4);
 
 	rt = -theta, -cos(theta)*point_x - sin(theta)*point_y, sin(theta)*point_x - cos(theta)*point_y, point_z;
 	std::cout<<"rt: "<<rt<<endl;
@@ -274,7 +275,7 @@ int main()
 	rt_lower = -1.0, -1.0,-1.0,-1.0;
 	rt_upper = 1.0, 1.0, 1.0, 1.0;
 	
-
+/*
 	double final_error = 0;
 	// time measurement variables 
 
