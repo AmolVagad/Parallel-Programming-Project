@@ -26,10 +26,16 @@
 
 __global__  void PerformRotationKernel(Matrix R, Matrix t, Matrix Point,Matrix New_Point)
 {
+	
+
+
+	
+	
+
 	// Create Matrices in the shared memory 
-	__shared__ float R_s[TILE_WIDTH][TILE_WIDTH];
-	__shared__ float t_s[TILE_WIDTH][TILE_WIDTH];
-	__shared__ float Point_s[TILE_WIDTH][TILE_WIDTH];
+	__shared__ float R_s[3][3];
+	__shared__ float t_s[3][1];
+	__shared__ float Point_s[TILE_WIDTH][3];
 	
 	// Thread allocation 
 	int bx = blockIdx.x; int by = blockIdx.y;

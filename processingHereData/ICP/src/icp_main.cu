@@ -50,7 +50,6 @@ Octree<std::vector<double>> octree_icp(bin_size);
 
 
 
-
 // Function to carry out Rotation of given point on the device 
 
 double* PerformRotationOnDevice(const Matrix R_h,const Matrix t_h, const Matrix Point_h, Matrix Rotated_Point_h)
@@ -117,13 +116,15 @@ double* PerformRotationOnDevice(const Matrix R_h,const Matrix t_h, const Matrix 
 
 // Function that calls transformation function and stores the transformed values 
 
-void PerformTransformationToAllPoints(Matrix R,Matrix t, point_cloud_data * data, point_cloud_data * transformed_data, int skips)
+void PerformTransformationToAllPoints(const Matrix R,const Matrix t, point_cloud_data * data, point_cloud_data * transformed_data, int skips)
 {
 	for(int i  = 0; i < data->size; i++)
 	{
 		Matrix point, rotated_point;
 		point.height = rotated_point.height =3;
 		point.width = rotated_point.width = 1;
+		point.elements = (double*)malloc(point.width*point.height*sizeof(double));
+		rotated_point.elements = (double*)malloc(rotated_point.width*rotated_point.height*sizeof(double));
 		point.elements[0] = data->x_coord.at(i);
 		point.elements[1] = data->y_coord.at(i);
 		point.elements[2] = data->z_coord.at(i);
@@ -150,12 +151,10 @@ int main()
 	
 	ifstream infile1;
   	infile1.open ("icp_model.csv");
-	//ifstream infile2;
-  	//infile2.open ("icp_sensor_scan.csv");
 	char* pEnd;
 	string x,y,z;
 
-
+	
 	// Reading data from the model map data csv file 
 
 	
@@ -174,12 +173,16 @@ int main()
 	
 	}
 	
+
+	
 	//Remove the last elements
 	model_data.x_coord.pop_back();
 	model_data.y_coord.pop_back();
 	model_data.z_coord.pop_back();
 	model_data.size = model_data.size - 1;
 
+
+	
 	// Calculating the min and max values of x,y,z
 	double max_x =  *max_element(model_data.x_coord.begin(),model_data.x_coord.end()) ;
 	double max_y =  *max_element(model_data.y_coord.begin(),model_data.y_coord.end()) ;
@@ -188,7 +191,7 @@ int main()
 	min_y =  *min_element(model_data.y_coord.begin(),model_data.y_coord.end()) ;
 	min_z =  *min_element(model_data.z_coord.begin(),model_data.z_coord.end()) ;
 	
-
+	
 	//cout<<"Min x value "<<min_x<<endl;
 	// Calculating the range
 	range_x = max_x - min_x; 
@@ -224,6 +227,8 @@ int main()
 		
 	}
 	
+
+	
 	//cout<<"Octree at 0 "<<octree_icp(0,0,0)[0]<<endl;		
 		
 	
@@ -239,18 +244,24 @@ int main()
 	R.height = 3;
 	t.width = 1;
 	t.height = 3;
+	// Allocating memory to the matrices 
+
+	R.elements = (double*)malloc(R.width*R.height*sizeof(double));
+	t.elements = (double*)malloc(t.width*t.height*sizeof(double));
 
 	R.elements[0] = cos(theta);R.elements[1]= -sin(theta); R.elements[2]= 0;
 	R.elements[3] =sin(theta);  R.elements[4]=cos(theta); R.elements[5]= 0;
 	R.elements[6] = 0; R.elements[7]= 0; R.elements[8]= 1;
-
+	
 	t.elements[0] = point_x;
 	t.elements[1]= point_y;
 	t.elements[2] = point_z;
 	
-
+	
 	// Generate mesasurement datra by rorating the model data
 	PerformTransformationToAllPoints(R, t, &model_data, &measurement_data,1);
+
+	
 
 /*
 	//Calling closest point.

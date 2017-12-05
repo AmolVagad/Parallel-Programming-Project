@@ -3,11 +3,11 @@ NVCC        = nvcc -std=c++11
 
 NVCC_FLAGS  = -I/usr/local/cuda/include -gencode=arch=compute_50,code=\"sm_50,compute_50\"
 
-CC = g++
-CXXFLAGS= -fopenmp -O3 -Wextra -std=c++11
-CUDAFLAGS= -std=c++11 -c -arch=sm_50
+#CC = g++
+#CXXFLAGS= -fopenmp -O3 -Wextra -std=c++11
+#CUDAFLAGS= -std=c++11 -c -arch=sm_50
 ifdef dbg
-	NVCC_FLAGS  += -gcc -std=c++11 
+	NVCC_FLAGS  += -g 
 else
 	NVCC_FLAGS  += -O2
 endif
