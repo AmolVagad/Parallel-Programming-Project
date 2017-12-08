@@ -315,8 +315,79 @@ int main()
 	
 
 
+
+
 	return 0;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+// Function to find the total error in cloud
+
+
+
+
+
+
+double findTotalErrorInCloudOnDevice(const Matrix rt) //This function can be written parallelly using Atomic Add operation
+{
+	iterations++;
+	double icp_error = 0.0;
+	point_cloud_data transformed_data;
+	int R.width = 3;int R.height =3; int t.height =3; int t.width = 1;
+	R.elements = (double*)malloc(R.width*R.height*sizeof(double));
+	t.elements = (double*)malloc(t.width*t.height*sizeof(double));
+
+	
+	R.elements[0] = cos(rt.elements[0]);R.elements[1] = -sin(rt.elements[0]);R.elements[2] = 0; R.elements[3] = sin(rt.elements[0]);R.elements[4] = cos(rt.elements[0]);R.elements[5] = 0;
+	R.elements[6] = 0; R.elements[7] = 0; R.elements[8] = 1;
+	t.elements[0] = rt.elements[1];
+	t.elements[1] =  rt.elements[2];
+	t.elements[2] =  rt.elements[3];
+	//cout<<"Check measurement data element "<<measurement_data.x_coord.at(0)<<endl;
+	PerformTransformationToAllPoints(R, t, &measurement_data, &transformed_data,1);
+	//cout<<"Measurement data size "<<measurement_data.size<<endl;
+	double true_map_error = 0.0;
+
+	for(int i = 0; i < measurement_data.size; i++)
+	{
+		
+		int j = measurement_data.index[i];
+		int x_Idx = measurement_data.bin_index_x[i];
+		int y_Idx = measurement_data.bin_index_y[i];
+		int z_Idx = measurement_data.bin_index_z[i];
+		
+
+		
+		icp_error +=sqrt(pow((transformed_data.x_coord[i] - octree_icp(x_Idx, y_Idx, z_Idx)[3*j]),2) + pow((transformed_data.y_coord[i] - octree_icp(x_Idx, y_Idx, z_Idx)[3*j + 1]),2) + pow((transformed_data.z_coord[i] - octree_icp(x_Idx, y_Idx, z_Idx)[3*j + 2]),2)); 
+
+		
+	}
+	
+
+	return icp_error;
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -89,4 +89,52 @@ __global__  void PerformRotationKernel( Matrix t, Matrix Point,Matrix New_Point)
 
 }
 
+
+
+
+
+
+
+
+
+
+__global__  void FindTotalErrorInCloud_Kernel( )
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #endif // #ifndef _ICP_KERNEL_H_
