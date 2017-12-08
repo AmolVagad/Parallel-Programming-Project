@@ -3,7 +3,6 @@
 
 
 #include <stdio.h>
-
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -18,26 +17,36 @@
 #include "dlib/optimization/find_optimal_parameters.h" 
 #include "octree_code/octree.h"
 #include "globals.h"
-#include "icp_kernel.cu"
-extern "C"
-using namespace std;
-///// For initial testing purposes carrying out rotation and translation operation on cuda//////////////////
 
+extern "C"
+
+using namespace std;
+
+
+__constant__ double R_constant[9];
+
+#include "icp_kernel.cu"
 
 
 // Creating variables to store the measurement and model data
 
-point_cloud_data measurement_data;
-point_cloud_data model_data;
+	point_cloud_data measurement_data;
+	point_cloud_data model_data;
 
-int bin_size = 4;
+	int bin_size = 4;
 
-double min_x =0;
-double min_y = 0;
-double min_z = 0;
-double range_x = 0;
-double range_y = 0;
-double range_z = 0;
+	double min_x =0;
+	double min_y = 0;
+	double min_z = 0;
+	double range_x = 0;
+	double range_y = 0;
+	double range_z = 0;
+
+
+
+	
+
+///// For initial testing purposes carrying out rotation and translation operation on cuda//////////////////
 
 
 
@@ -53,31 +62,31 @@ typedef dlib::matrix<double,0,1> column_vector;
 
 // Function to carry out Rotation of given point on the device 
 
-double* PerformRotationOnDevice(const Matrix R_h,const Matrix t_h, const Matrix Point_h, Matrix Rotated_Point_h)
+double* PerformRotationOnDevice(const Matrix R_h, const Matrix t_h, const Matrix Point_h, Matrix Rotated_Point_h)
 {
 	
-	int size_1 = R_h.width*R_h.height*sizeof(double);
-	int size_2 = t_h.width*t_h.height*sizeof(double);
-
+	int size_R = R_h.width*R_h.height*sizeof(double);
+	int size_T = t_h.width*t_h.height*sizeof(double);
+	int size_Point = Point_h.width*Point_h.height*sizeof(double);
 	// Declare the device variables 
 	
-	Matrix R_d, t_d,Point_d, Rotated_Point_d;
+	Matrix  t_d,Point_d, Rotated_Point_d;
 	
 	// Allocate memory on the device
 	
-	cudaMalloc((void **)&R_d.elements,size_1);
-	cudaMalloc((void **)&t_d.elements,size_2);
-	cudaMalloc((void **)&Point_d.elements,size_2);
+	
+	cudaMalloc((void **)&t_d.elements,size_T);
+	cudaMalloc((void **)&Point_d.elements,size_Point);
 	
 	// Copy from host to device 
 	
-	cudaMemcpy(R_d.elements,R_h.elements,size_1, cudaMemcpyHostToDevice);
-	cudaMemcpy(t_d.elements,t_h.elements,size_2, cudaMemcpyHostToDevice);
-	cudaMemcpy(Point_d.elements,Point_h.elements,size_2, cudaMemcpyHostToDevice);
+	
+	cudaMemcpy(t_d.elements,t_h.elements,size_T, cudaMemcpyHostToDevice);
+	cudaMemcpy(Point_d.elements,Point_h.elements,size_Point, cudaMemcpyHostToDevice);
 	
 	
 	// Allocate device memory for result 
-	cudaMalloc((void **)&Rotated_Point_d.elements,size_2);
+	cudaMalloc((void **)&Rotated_Point_d.elements,size_T);
 	
 	
 	// Kernel Call 
@@ -97,14 +106,16 @@ double* PerformRotationOnDevice(const Matrix R_h,const Matrix t_h, const Matrix 
 
 	dim3 dimBlock(TILE_WIDTH, TILE_WIDTH,1);
 
+	cudaMemcpyToSymbol(R_constant,R_h.elements,3 * 3*sizeof(double));
+
     // Launch the device computation threads!
 
-     PerformRotationKernel<<<dimGrid,dimBlock>>>(R_d, t_d, Point_d, Rotated_Point_d);
+     PerformRotationKernel<<<dimGrid,dimBlock>>>(t_d, Point_d, Rotated_Point_d);
 		
 	// Transfer Rotated Point from device to host
-     cudaMemcpy(Rotated_Point_h.elements, Rotated_Point_d.elements, size_2, cudaMemcpyDeviceToHost);
+     cudaMemcpy(Rotated_Point_h.elements, Rotated_Point_d.elements, size_T, cudaMemcpyDeviceToHost);
        // Free device memory for all
-     cudaFree(R_d.elements); cudaFree(t_d.elements); cudaFree (Point_d.elements);cudaFree (Rotated_Point_d.elements);
+     cudaFree(t_d.elements); cudaFree (Point_d.elements);cudaFree (Rotated_Point_d.elements);
      
      return Rotated_Point_h.elements;	
 	
@@ -119,22 +130,25 @@ double* PerformRotationOnDevice(const Matrix R_h,const Matrix t_h, const Matrix 
 
 void PerformTransformationToAllPoints(const Matrix R,const Matrix t, point_cloud_data * data, point_cloud_data * transformed_data, int skips)
 {
+	Matrix point, rotated_point;
+	rotated_point.height =3;
+	rotated_point.width = 1;  
+	point.elements = (double*)malloc(3*data->size*sizeof(double));
+	rotated_point.elements = (double*)malloc(rotated_point.width*rotated_point.height*sizeof(double));
 	for(int i  = 0; i < data->size; i++)
 	{
-		Matrix point, rotated_point;
-		point.height = rotated_point.height =3;
-		point.width = rotated_point.width = 1;
-		point.elements = (double*)malloc(point.width*point.height*sizeof(double));
-		rotated_point.elements = (double*)malloc(rotated_point.width*rotated_point.height*sizeof(double));
-		point.elements[0] = data->x_coord.at(i);
-		point.elements[1] = data->y_coord.at(i);
-		point.elements[2] = data->z_coord.at(i);
-		rotated_point.elements =PerformRotationOnDevice(R, t, point, rotated_point);
+		
+		
+		point.elements[i+0] = data->x_coord.at(i);
+		point.elements[i+1] = data->y_coord.at(i);
+		point.elements[i+2] = data->z_coord.at(i);
+		
 		transformed_data->x_coord.push_back(rotated_point.elements[0]);
 		transformed_data->y_coord.push_back(rotated_point.elements[1]);
 		transformed_data->z_coord.push_back(rotated_point.elements[2]);		 
 	}
 	transformed_data->size = transformed_data->x_coord.size();
+	rotated_point.elements = PerformRotationOnDevice(R, t, point, rotated_point);
 	
 }
 
@@ -147,9 +161,10 @@ void PerformTransformationToAllPoints(const Matrix R,const Matrix t, point_cloud
 int main()
 {
 	
+	
+	
 
-	
-	
+
 	ifstream infile1;
   	infile1.open ("icp_model.csv");
 	char* pEnd;
@@ -263,7 +278,7 @@ int main()
 	PerformTransformationToAllPoints(R, t, &model_data, &measurement_data,1);
 
 	
-
+/*
 
 	//Calling closest point.
 	column_vector  rt(4), rt_lower(4), rt_upper(4);
@@ -275,7 +290,7 @@ int main()
 	rt_lower = -1.0, -1.0,-1.0,-1.0;
 	rt_upper = 1.0, 1.0, 1.0, 1.0;
 	
-/*
+
 	double final_error = 0;
 	// time measurement variables 
 

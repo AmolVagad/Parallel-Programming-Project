@@ -24,7 +24,7 @@
 
 #define TILE_WIDTH 4 
 
-__global__  void PerformRotationKernel(Matrix R, Matrix t, Matrix Point,Matrix New_Point)
+__global__  void PerformRotationKernel( Matrix t, Matrix Point,Matrix New_Point)
 {
 	
 
@@ -33,7 +33,7 @@ __global__  void PerformRotationKernel(Matrix R, Matrix t, Matrix Point,Matrix N
 	
 
 	// Create Matrices in the shared memory 
-	__shared__ float R_s[3][3];
+	
 	__shared__ float t_s[3][1];
 	__shared__ float Point_s[TILE_WIDTH][3];
 	
@@ -46,15 +46,7 @@ __global__  void PerformRotationKernel(Matrix R, Matrix t, Matrix Point,Matrix N
 	int col = bx*TILE_WIDTH + tx;
 	float result = 0.00;
 
-	//Loading R, t and point into the shared memory 
-	 
-	for ( int m = 0; m <= (R.width /TILE_WIDTH)  ; ++m)
-	{
-		if(row < R.height && (m*TILE_WIDTH + tx) < R.width)   //Checking the boundary conditions for matrix M               
-			R_s[ty][tx] = R.elements[row*R.width + m*TILE_WIDTH + tx];
-		else
-			R_s[ty][tx] = 0;
-	}
+	
 	
 	for (int n = 0; n <= (Point.width/TILE_WIDTH); ++n)
 	{
@@ -69,20 +61,29 @@ __global__  void PerformRotationKernel(Matrix R, Matrix t, Matrix Point,Matrix N
 	
 	}
 	
-		__syncthreads();         // To ensure all elements of tile are loaded and consumed 
+	__syncthreads();         // To ensure all elements of tile are loaded and consumed 
 
-		for(int k = 0; k < TILE_WIDTH; ++k)
-		{	
-			result += R_s[ty][k]*Point_s[k][tx] + t_s[k][tx];
-	        
-	
+		
+		
+
+
+	// carrying out the actua multiplication 
+	 if(ty < TILE_WIDTH && tx < TILE_WIDTH)
+	 {
+	 	for(int i = 0; i < 3; i++)
+		{
+    			for(int j = 0; j < 3; j++)
+    			{
+				result += R_constant[i*3 + j]*Point_s[i+ty][j]+ t_s[i][j];
+    			}
 		}
-		__syncthreads();        // To ensure all elements of tile are loaded and consumed 
+	 }
 
 
-        
-	if(row < R.height && col < Point.width)                    //Checking the boundary conditions for matrix new_point
-		 New_Point.elements[row*Point.width + col] = result;
+         __syncthreads();        // To ensure all elements of tile are loaded and consumed 
+
+	if(row < 3 && col < t.width)                    //Checking the boundary conditions for matrix new_point
+	 New_Point.elements[row*t.width + col] = result;
 
 	
 
