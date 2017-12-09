@@ -24,6 +24,7 @@ using namespace std;
 
 
 __constant__ double R_constant[9];
+Matrix AllocateDeviceMatrix(const Matrix M);
 
 #include "icp_kernel.cu"
 
@@ -65,18 +66,18 @@ typedef dlib::matrix<double,0,1> column_vector;
 double* PerformRotationOnDevice(const Matrix R_h, const Matrix t_h, const Matrix Point_h, Matrix Rotated_Point_h)
 {
 	
-	int size_R = R_h.width*R_h.height*sizeof(double);
+	
 	int size_T = t_h.width*t_h.height*sizeof(double);
 	int size_Point = Point_h.width*Point_h.height*sizeof(double);
 	// Declare the device variables 
 	
-	Matrix  t_d,Point_d, Rotated_Point_d;
+	
 	
 	// Allocate memory on the device
 	
 	
-	cudaMalloc((void **)&t_d.elements,size_T);
-	cudaMalloc((void **)&Point_d.elements,size_Point);
+	Matrix t_d = AllocateDeviceMatrix(t_h);
+	Matrix Point_d = AllocateDeviceMatrix(Point_h);
 	
 	// Copy from host to device 
 	
@@ -86,7 +87,7 @@ double* PerformRotationOnDevice(const Matrix R_h, const Matrix t_h, const Matrix
 	
 	
 	// Allocate device memory for result 
-	cudaMalloc((void **)&Rotated_Point_d.elements,size_T);
+	Matrix Rotated_Point_d = AllocateDeviceMatrix(Rotated_Point_h);
 	
 	
 	// Kernel Call 
@@ -337,7 +338,7 @@ int main()
 
 
 
-
+/*
 double findTotalErrorInCloudOnDevice(const Matrix rt) //This function can be written parallelly using Atomic Add operation
 {
 	iterations++;
@@ -376,7 +377,16 @@ double findTotalErrorInCloudOnDevice(const Matrix rt) //This function can be wri
 
 	return icp_error;
 }
-
+*/
+// Function to allocate matrix memory on the device
+ 
+Matrix AllocateDeviceMatrix(const Matrix M)
+{
+    Matrix Mdevice = M;
+    int size = M.width * M.height * sizeof(float);
+    cudaMalloc((void**)&Mdevice.elements, size);
+    return Mdevice;
+}
 
 
 

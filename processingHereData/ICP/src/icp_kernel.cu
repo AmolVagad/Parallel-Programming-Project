@@ -96,32 +96,22 @@ __global__  void PerformRotationKernel( Matrix t, Matrix Point,Matrix New_Point)
 
 
 
+/*
 
-
-__global__  void FindTotalErrorInCloud_Kernel( )
+__global__  void FindTotalErrorInCloud_Kernel(Matrix index, Matrix bin_index_x,Matrix bin_index_y,Matrix bin_index_z, float icp_error )
 {
 
+	int i = blockdim.x*blockIdx.x + threadIdx.x;
+	float error = 0.0f;
+	int j = index.elements[i];
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	icp_error +=sqrt(pow((transformed_data.x_coord[i] - octree_icp(x_Idx, y_Idx, z_Idx)[3*j]),2) + pow((transformed_data.y_coord[i] - octree_icp(x_Idx, y_Idx, z_Idx)[3*j + 1]),2) + pow((transformed_data.z_coord[i] - octree_icp(x_Idx, y_Idx, z_Idx)[3*j + 2]),2)); 
 
 
 
 }
 
-
+*/
 
 
 
