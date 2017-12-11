@@ -24,8 +24,11 @@ using namespace std;
 
 
 __constant__ double R_constant[9];
-Matrix AllocateDeviceMatrix(const Matrix M);
 
+// Function declarations
+Matrix AllocateDeviceMatrix(const Matrix M);
+double findTotalErrorInCloudOnDevice(const Matrix rt);
+Vector AllocateDeviceVector(const Vector V);
 #include "icp_kernel.cu"
 
 
@@ -82,7 +85,8 @@ double* PerformRotationOnDevice(const Matrix R_h, const Matrix t_h, const Matrix
 	// Copy from host to device 
 	
 	
-	cudaMemcpy(t_d.elements,t_h.elements,size_T, cudaMemcpyHostToDevice);
+        cudaMemcpy(t_d.elements,t_h.elements,size_T, cudaMemcpyHostToDevice);
+		
 	cudaMemcpy(Point_d.elements,Point_h.elements,size_Point, cudaMemcpyHostToDevice);
 	
 	
@@ -133,7 +137,9 @@ void PerformTransformationToAllPoints(const Matrix R,const Matrix t, point_cloud
 {
 	Matrix point, rotated_point;
 	rotated_point.height =3;
-	rotated_point.width = 1;  
+	rotated_point.width = 1; 
+	point.height = data->x_coord.size();
+	point.width = 3; 
 	point.elements = (double*)malloc(3*data->size*sizeof(double));
 	rotated_point.elements = (double*)malloc(rotated_point.width*rotated_point.height*sizeof(double));
 	for(int i  = 0; i < data->size; i++)
@@ -143,11 +149,12 @@ void PerformTransformationToAllPoints(const Matrix R,const Matrix t, point_cloud
 		point.elements[i+0] = data->x_coord.at(i);
 		point.elements[i+1] = data->y_coord.at(i);
 		point.elements[i+2] = data->z_coord.at(i);
-		
+			
 		transformed_data->x_coord.push_back(rotated_point.elements[0]);
 		transformed_data->y_coord.push_back(rotated_point.elements[1]);
 		transformed_data->z_coord.push_back(rotated_point.elements[2]);		 
 	}
+	
 	transformed_data->size = transformed_data->x_coord.size();
 	rotated_point.elements = PerformRotationOnDevice(R, t, point, rotated_point);
 	
@@ -279,19 +286,23 @@ int main()
 	PerformTransformationToAllPoints(R, t, &model_data, &measurement_data,1);
 
 	
-/*
+
 
 	//Calling closest point.
-	column_vector  rt(4), rt_lower(4), rt_upper(4);
-
-	rt = -theta, -cos(theta)*point_x - sin(theta)*point_y, sin(theta)*point_x - cos(theta)*point_y, point_z;
-	std::cout<<"rt: "<<rt<<endl;
-
-	rt = -0.0,0.0,0.0,0.0;
+	Matrix  rt;
+	rt.width =  1;
+	rt.height =  4;
+	column_vector rt_lower(4), rt_upper(4);
+	rt.elements = (double*)malloc(rt.width*rt.height*sizeof(double));
+	rt.elements[0] = 0;rt.elements[1] = 0;
+	rt.elements[2] = 0;rt.elements[3] = 0;
 	rt_lower = -1.0, -1.0,-1.0,-1.0;
 	rt_upper = 1.0, 1.0, 1.0, 1.0;
-	
 
+	double temp_error = 0;	
+
+	temp_error = findTotalErrorInCloudOnDevice(rt);
+/*
 	double final_error = 0;
 	// time measurement variables 
 
@@ -338,13 +349,14 @@ int main()
 
 
 
-/*
+
 double findTotalErrorInCloudOnDevice(const Matrix rt) //This function can be written parallelly using Atomic Add operation
 {
-	iterations++;
+	//iterations++;
 	double icp_error = 0.0;
 	point_cloud_data transformed_data;
-	int R.width = 3;int R.height =3; int t.height =3; int t.width = 1;
+	Matrix R, t;
+        R.width = 3;R.height =3;t.height =3;t.width = 1;
 	R.elements = (double*)malloc(R.width*R.height*sizeof(double));
 	t.elements = (double*)malloc(t.width*t.height*sizeof(double));
 
@@ -356,8 +368,95 @@ double findTotalErrorInCloudOnDevice(const Matrix rt) //This function can be wri
 	t.elements[2] =  rt.elements[3];
 	//cout<<"Check measurement data element "<<measurement_data.x_coord.at(0)<<endl;
 	PerformTransformationToAllPoints(R, t, &measurement_data, &transformed_data,1);
+
+
+	// Creating device variables 
+
+	Vector bin_index_x_device,bin_index_y_device, bin_index_z_device,index_device,transform_x_device,transform_y_device,transform_z_device ;
+	
+	
+
+	index_device.size = measurement_data.index.size();
+
+	
+	bin_index_x_device.size = measurement_data.bin_index_x.size();
+	bin_index_y_device.size = measurement_data.bin_index_y.size();
+	bin_index_z_device.size = measurement_data.bin_index_z.size();
+
+	transform_x_device.size = transformed_data.x_coord.size();
+	transform_y_device.size = transformed_data.y_coord.size();
+	transform_z_device.size = transformed_data.z_coord.size();
+
+
+	int size_var = bin_index_x_device.size;
+
+	float* error_on_hostt,error_on_device ;
+	
+	// Allocate memory and copy to device 	
+
+
+
+	cudaMalloc((void**)&error_on_device,sizeof(float));
+	
+	
+	cudaMalloc((void**)&transform_x_device.elements,transform_x_device.size*sizeof(double));
+	
+	cudaMemcpy(transform_x_device.elements,transformed_data.x_coord.data(),transform_x_device.size*sizeof(double), cudaMemcpyHostToDevice);
+
+
+
+
+	cudaMalloc((void**)&transform_y_device.elements,transform_y_device.size*sizeof(double));
+	
+	cudaMemcpy(transform_y_device.elements,transformed_data.y_coord.data(),transform_y_device.size*sizeof(double), cudaMemcpyHostToDevice);
+
+
+	cudaMalloc((void**)&transform_z_device.elements,transform_z_device.size*sizeof(double));
+	
+	cudaMemcpy(transform_z_device.elements,transformed_data.z_coord.data(),transform_z_device.size*sizeof(double), cudaMemcpyHostToDevice);
+		
+	
+
+
+	
+	cudaMalloc((void**)&bin_index_x_device.elements,size_var*sizeof(int));
+	
+	cudaMemcpy(bin_index_x_device.elements,measurement_data.bin_index_x.data(),size_var*sizeof(int), cudaMemcpyHostToDevice);
+
+
+	cudaMalloc((void**)&bin_index_y_device.elements,size_var*sizeof(int));
+	
+	cudaMemcpy(bin_index_y_device.elements,measurement_data.bin_index_y.data(),size_var*sizeof(int), cudaMemcpyHostToDevice);
+
+
+	cudaMalloc((void**)&bin_index_z_device.elements,size_var*sizeof(int));
+	
+	cudaMemcpy(bin_index_z_device.elements,measurement_data.bin_index_z.data(),size_var*sizeof(int), cudaMemcpyHostToDevice);
+
+
+
+	cudaMalloc((void**)&bin_index_z_device.elements,size_var*sizeof(int));
+	
+	cudaMemcpy(bin_index_z_device.elements,measurement_data.bin_index_z.data(),size_var*sizeof(int), cudaMemcpyHostToDevice);
+
+
+
+	// Kernel Call 
+
+//-------Add kernel call function here --------------------
+
+	
+	
+	
+
+	
+
+	
 	//cout<<"Measurement data size "<<measurement_data.size<<endl;
-	double true_map_error = 0.0;
+	/*
+	
+
+
 
 	for(int i = 0; i < measurement_data.size; i++)
 	{
@@ -374,10 +473,10 @@ double findTotalErrorInCloudOnDevice(const Matrix rt) //This function can be wri
 		
 	}
 	
-
+*/
 	return icp_error;
 }
-*/
+
 // Function to allocate matrix memory on the device
  
 Matrix AllocateDeviceMatrix(const Matrix M)
@@ -385,11 +484,19 @@ Matrix AllocateDeviceMatrix(const Matrix M)
     Matrix Mdevice = M;
     int size = M.width * M.height * sizeof(float);
     cudaMalloc((void**)&Mdevice.elements, size);
+    
     return Mdevice;
 }
+/*
+Vector AllocateDeviceVector(std::vector<int> V)
+{
+    std::vector<int> Vdevice = V;
+    int size = V.size() * sizeof(int);
+    cudaMalloc((void**)&Vdevice, size);
+    return Vdevice;
+}
 
-
-
+*/
 
 
 

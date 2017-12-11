@@ -29,7 +29,14 @@ typedef struct {
 } Matrix;
 
 
+// Vector structure declaration
 
+typedef struct {
+
+    unsigned int size;
+    unsigned int pitch;
+    float* elements;
+} Vector;
 
 
 // Point cloud data structure 
