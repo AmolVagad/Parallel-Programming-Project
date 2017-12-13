@@ -415,11 +415,120 @@ void cal_closest_points(Matrix rt)
 	find_bin_x_kernel<<<grid, block>>>(x_coord_dev, transformed_data.size, bin_x_d);
 	find_bin_y_kernel<<<grid, block>>>(y_coord_dev, transformed_data.size, bin_y_d);
 	find_bin_z_kernel<<<grid, block>>>(z_coord_dev, transformed_data.size, bin_z_d);
-	
+
 	cudaDeviceSynchronize();
+
+	int * bin_x = (int*)malloc(transformed_data.size*sizeof(int));
+	int * bin_y = (int*)malloc(transformed_data.size*sizeof(int));
+	int * bin_z = (int*)malloc(transformed_data.size*sizeof(int));
+
+	cudaMemcpy(bin_x, bin_x_d, transformed_data.size*sizeof(int), cudaMemcpyDeviceToHost);
+	cudaMemcpy(bin_y, bin_y_d, transformed_data.size*sizeof(int), cudaMemcpyDeviceToHost);
+	cudaMemcpy(bin_z, bin_z_d, transformed_data.size*sizeof(int), cudaMemcpyDeviceToHost);
 
 	for(int i = 0; i < transformed_data.size; i++)
 	{
+
+		double * octree_data_device;
+		int p_q_r[3] = {0,0,0};
+		int non_empty_bin = 0;
+		int max_bin_offset = 2;
+		int size_1 = 0;
+		int size_2 = 0;
+		for(p_q_r[0] = -1; p_q_r[0] < max_bin_offset; p_q_r[0]++)
+		{
+			for(p_q_r[1] = -1; p_q_r[1] < max_bin_offset; p_q_r[1]++)
+			{
+				for(p_q_r[2] = -1; p_q_r[2] < max_bin_offset; p_q_r[2]++)
+				{
+					bool p_flag = ((p_q_r[0] + bin_x[i]) >= 0) && ((p_q_r[0] + bin_x[i]) <= bin_size - 1);
+					bool q_flag = ((p_q_r[1] + bin_y[i]) >= 0) && ((p_q_r[1] + bin_y[i]) <= bin_size - 1);
+					bool r_flag = ((p_q_r[2] + bin_z[i]) >= 0) && ((p_q_r[2] + bin_z[i]) <= bin_size - 1);
+					if(p_flag && q_flag && r_flag)
+						size_1 = size_1 + octree_icp(p_q_r[0] + bin_x[i], p_q_r[1] + bin_y[i], p_q_r[2] + bin_z[i]).size();
+				}
+			}
+		}
+
+		while(size_1 == 0 && size_2 == 0)
+		{
+			max_bin_offset = max_bin_offset + 1;
+			for(int a = 0; a < 6; a++)
+			{
+				p_q_r[a%3] = pow(-1,a)*(max_bin_offset - 1);
+				for(int b = -max_bin_offset + 1; b < max_bin_offset; b++)
+				{
+					p_q_r[(a+1)%3] = b;
+					for(int c = -max_bin_offset + 1; c < max_bin_offset; c++)
+					{
+						p_q_r[(a+2)%3] = c;
+						bool p_flag = ((p_q_r[0] + bin_x[i]) >= 0) && ((p_q_r[0] + bin_x[i]) <= bin_size - 1);
+						bool q_flag = ((p_q_r[1] + bin_y[i]) >= 0) && ((p_q_r[1] + bin_y[i]) <= bin_size - 1);
+						bool r_flag = ((p_q_r[2] + bin_z[i]) >= 0) && ((p_q_r[2] + bin_z[i]) <= bin_size - 1);
+						if(p_flag && q_flag && r_flag)
+							size_2 = size_2 + octree_icp(p_q_r[0] + bin_x[i], p_q_r[1] + bin_y[i], p_q_r[2] + bin_z[i]).size();
+					}
+				}
+			}
+		}
+		if(size_1 > 0 && size_2 == 0)
+		{
+			cudaMalloc((void**)&octree_data_device, size_1*sizeof(double));
+			for(p_q_r[0] = -1; p_q_r[0] < max_bin_offset; p_q_r[0]++)
+			{
+				for(p_q_r[1] = -1; p_q_r[1] < max_bin_offset; p_q_r[1]++)
+				{
+					for(p_q_r[2] = -1; p_q_r[2] < max_bin_offset; p_q_r[2]++)
+					{
+						bool p_flag = ((p_q_r[0] + bin_x[i]) >= 0) && ((p_q_r[0] + bin_x[i]) <= bin_size - 1);
+						bool q_flag = ((p_q_r[1] + bin_y[i]) >= 0) && ((p_q_r[1] + bin_y[i]) <= bin_size - 1);
+						bool r_flag = ((p_q_r[2] + bin_z[i]) >= 0) && ((p_q_r[2] + bin_z[i]) <= bin_size - 1);
+						if(p_flag && q_flag && r_flag)
+						{
+							if(octree_icp(bin_x[i] + p_q_r[0], bin_y[i] + p_q_r[1], bin_z[i] + p_q_r[2]).size()/3 > 0)
+							{	
+								int current_size = octree_icp(bin_x[i] + p_q_r[0], bin_y[i] + p_q_r[1], bin_z[i] + p_q_r[2]).size(); 
+								octree_data_device += current_size;
+								cudaMemcpy(octree_data_device, octree_icp(bin_x[i] + p_q_r[0], bin_y[i] + p_q_r[1], bin_z[i] + p_q_r[2]).data(), current_size*sizeof(double), cudaMemcpyHostToDevice);
+							}
+						}
+						
+					}
+				}
+			}
+		}
+
+
+		if(size_2 > 0 && size_1 == 0)
+		{
+			for(int a = 0; a < 6; a++)
+			{
+				p_q_r[a%3] = pow(-1,a)*(max_bin_offset - 1);
+				for(int b = -max_bin_offset + 1; b < max_bin_offset; b++)
+				{
+					p_q_r[(a+1)%3] = b;
+					for(int c = -max_bin_offset + 1; c < max_bin_offset; c++)
+					{
+						p_q_r[(a+2)%3] = c;
+						bool p_flag = ((p_q_r[0] + bin_x[i]) >= 0) && ((p_q_r[0] + bin_x[i]) <= bin_size - 1);
+						bool q_flag = ((p_q_r[1] + bin_y[i]) >= 0) && ((p_q_r[1] + bin_y[i]) <= bin_size - 1);
+						bool r_flag = ((p_q_r[2] + bin_z[i]) >= 0) && ((p_q_r[2] + bin_z[i]) <= bin_size - 1);
+						if(p_flag && q_flag && r_flag)
+						{
+							if(octree_icp(bin_x[i] + p_q_r[0], bin_y[i] + p_q_r[1], bin_z[i] + p_q_r[2]).size()/3 > 0)
+							{	
+								int current_size = octree_icp(bin_x[i] + p_q_r[0], bin_y[i] + p_q_r[1], bin_z[i] + p_q_r[2]).size(); 
+								octree_data_device += current_size;
+								cudaMemcpy(octree_data_device, octree_icp(bin_x[i] + p_q_r[0], bin_y[i] + p_q_r[1], bin_z[i] + p_q_r[2]).data(), current_size*sizeof(double), cudaMemcpyHostToDevice);
+							}
+						}
+					}
+				}
+			}
+		}
+
+
+
 	}
 
 
