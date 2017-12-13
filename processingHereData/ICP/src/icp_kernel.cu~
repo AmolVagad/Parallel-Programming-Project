@@ -78,9 +78,34 @@ __global__  void PerformRotationKernel( Matrix t, Matrix Point,Matrix New_Point)
 
 }
 //Kernel Function to find the bin of the point
-__global__ void find_bin(double * x_coord, double range_x, double x_min, int numPts, double * bin_x)
+__global__ void find_bin_x_kernel(double * x_coord_d, int numPts, int * bin_x_d)
 {
-	;
+	int t = blockIdx.x*blockDim.x + threadIdx.x;
+	if(t < numPts)
+	{
+		int bin_x_temp = floor(((x_coord_d[t]  - x_min_d)/range_x_d)*bin_size_d);
+		bin_x_d[t] = max(min(bin_x_temp, bin_size_d - 1), 0);
+	}
+}
+
+__global__ void find_bin_y_kernel(double * y_coord_d, int numPts, int * bin_y_d)
+{
+	int t = blockIdx.x*blockDim.x + threadIdx.x;
+	if(t < numPts)
+	{
+		int bin_y_temp = floor(((y_coord_d[t]  - y_min_d)/range_y_d)*bin_size_d);
+		bin_y_d[t] = max(min(bin_y_temp, bin_size_d - 1), 0);
+	}
+}
+
+__global__ void find_bin_z_kernel(double * z_coord_d, int numPts, int * bin_z_d)
+{
+	int t = blockIdx.x*blockDim.x + threadIdx.x;
+	if(t < numPts)
+	{
+		int bin_z_temp = floor(((z_coord_d[t]  - z_min_d)/range_z_d)*bin_size_d);
+		bin_z_d[t] = max(min(bin_z_temp, bin_size_d - 1), 0);
+	}
 }
 
 

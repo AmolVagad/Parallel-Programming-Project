@@ -24,6 +24,14 @@ using namespace std;
 
 
 __constant__ double R_constant[9];
+__constant__ double range_x_d;
+__constant__ double range_y_d;
+__constant__ double range_z_d;
+__constant__ double x_min_d;
+__constant__ double y_min_d;
+__constant__ double z_min_d;
+__constant__ int bin_size_d;
+
 
 // Function declarations
 Matrix AllocateDeviceMatrix(const Matrix M);
@@ -60,7 +68,7 @@ Octree<std::vector<double>> octree_icp(bin_size);
 // Define the column vector 
 typedef dlib::matrix<double,0,1> column_vector;
 
-void cal_closest_points(const column_vector &rt);
+void cal_closest_points(Matrix rt);
 
 
 
@@ -302,6 +310,8 @@ int main()
 	double temp_error = 0;	
 
 	temp_error = findTotalErrorInCloudOnDevice(rt);
+
+	cal_closest_points(rt);
 /*
 	double final_error = 0;
 	// time measurement variables 
@@ -334,17 +344,9 @@ int main()
 
 
 //Calculating the closest point
-void cal_closest_points(const column_vector &rt)
+void cal_closest_points(Matrix rt)
 {
 	point_cloud_data transformed_data;
-	dlib::matrix<double> R(3,3);
-	dlib::matrix<double> t(3,1);
-
-	R = cos(rt(0)), -sin(rt(0)), 0,
-	    sin(rt(0)), cos(rt(0)), 0,
-	    0, 0, 1;
-
-	t = rt(1), rt(2), rt(3);
 
 	Matrix R_h, t_h;
 	R_h.width = 3;
@@ -356,13 +358,13 @@ void cal_closest_points(const column_vector &rt)
 	R_h.elements = (double*)malloc(R_h.width*R_h.height*sizeof(double));
 	t_h.elements = (double*)malloc(t_h.width*t_h.height*sizeof(double));
 
-	R_h.elements[0] = R(0);R_h.elements[1]= R(1); R_h.elements[2]= R(2);
-	R_h.elements[3] = R(3);  R_h.elements[4]= R(4); R_h.elements[5]= R(5);
-	R_h.elements[6] = R(6); R_h.elements[7]= R(7); R_h.elements[8]= R(8);
+	R_h.elements[0] = cos(rt.elements[0]);R_h.elements[1]= -sin(rt.elements[0]); R_h.elements[2]= 0;
+	R_h.elements[3] = sin(rt.elements[0]);  R_h.elements[4]= cos(rt.elements[0]); R_h.elements[5]= 0;
+	R_h.elements[6] = 0; R_h.elements[7]= 0; R_h.elements[8]= 1;
 	
-	t_h.elements[0] = t(0);
-	t_h.elements[1]= t(1);
-	t_h.elements[2] = t(2);
+	t_h.elements[0] = rt.elements[1];
+	t_h.elements[1] = rt.elements[2];
+	t_h.elements[2] = rt.elements[3];
 
 
 	PerformTransformationToAllPoints(R_h, t_h, &measurement_data, &transformed_data,1);
@@ -380,20 +382,45 @@ void cal_closest_points(const column_vector &rt)
 	cudaMalloc((void**)&z_coord_dev, transformed_data.size*sizeof(double));
 	cudaMemcpy(z_coord_dev, transformed_data.z_coord.data(), transformed_data.size*sizeof(double), cudaMemcpyHostToDevice);
 
+	int * bin_x_d;
+	cudaMalloc((void**)&bin_x_d, transformed_data.size*sizeof(int));
+
+	int * bin_y_d;
+	cudaMalloc((void**)&bin_y_d, transformed_data.size*sizeof(int));
+
+	int * bin_z_d;
+	cudaMalloc((void**)&bin_z_d, transformed_data.size*sizeof(int));
+
+	cudaMemcpyToSymbol(&range_x_d, &range_x, sizeof(double));
+	cudaMemcpyToSymbol(&range_y_d, &range_y, sizeof(double));
+	cudaMemcpyToSymbol(&range_z_d, &range_z, sizeof(double));
+	cudaMemcpyToSymbol(&x_min_d, &min_x, sizeof(double));
+	cudaMemcpyToSymbol(&y_min_d, &min_y, sizeof(double));
+	cudaMemcpyToSymbol(&z_min_d, &min_z, sizeof(double));
+	cudaMemcpyToSymbol(&bin_size_d, &bin_size, sizeof(int));
+
+
 	//Calculate the number of blocks and grid
 	dim3 block, grid;
 	block.x = TILE_WIDTH;
-	block.y = 1;
-	block.z = 1;
+	block.y = TILE_WIDTH;
+	block.z = TILE_WIDTH;
 	if(transformed_data.size%block.x == 0)
 		grid.x = transformed_data.size%block.x;
 	else
 		grid.x = transformed_data.size/block.x;
 	grid.y = 1;
 	grid.z = 1;
+
+	find_bin_x_kernel<<<grid, block>>>(x_coord_dev, transformed_data.size, bin_x_d);
+	find_bin_y_kernel<<<grid, block>>>(y_coord_dev, transformed_data.size, bin_y_d);
+	find_bin_z_kernel<<<grid, block>>>(z_coord_dev, transformed_data.size, bin_z_d);
 	
-	
-	
+	cudaDeviceSynchronize();
+
+	for(int i = 0; i < transformed_data.size; i++)
+	{
+	}
 
 
 
