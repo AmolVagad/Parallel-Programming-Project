@@ -308,10 +308,12 @@ int main()
 	rt_upper = 1.0, 1.0, 1.0, 1.0;
 
 	double temp_error = 0;	
-
+	double cpu_starttime , cpu_endtime;
 	temp_error = findTotalErrorInCloudOnDevice(rt);
-
+	cpu_starttime = clock();
 	cal_closest_points(rt);
+	cpu_endtime = clock();
+	cout<<"The time taken for calculation of closest point = "<<((cpu_endtime - cpu_starttime)/CLOCKS_PER_SEC)<<endl;
 /*
 	double final_error = 0;
 	// time measurement variables 
@@ -501,6 +503,7 @@ void cal_closest_points(Matrix rt)
 
 		if(size_2 > 0 && size_1 == 0)
 		{
+			cudaMalloc((void**)&octree_data_device, size_2*sizeof(double));
 			for(int a = 0; a < 6; a++)
 			{
 				p_q_r[a%3] = pow(-1,a)*(max_bin_offset - 1);
