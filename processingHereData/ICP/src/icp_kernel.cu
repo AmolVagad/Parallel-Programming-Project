@@ -77,6 +77,12 @@ __global__  void PerformRotationKernel( Matrix t, Matrix Point,Matrix New_Point)
 	
 
 }
+//Kernel Function to find the bin of the point
+__global__ void find_bin(double * x_coord, double range_x, double x_min, int numPts, double * bin_x)
+{
+	;
+}
+
 
 /// Kernel function to find the error : 
 

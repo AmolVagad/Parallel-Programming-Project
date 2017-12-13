@@ -35,7 +35,7 @@ typedef struct {
 
     unsigned int size;
     unsigned int pitch;
-    float* elements;
+    int* elements;
 } Vector;
 
 

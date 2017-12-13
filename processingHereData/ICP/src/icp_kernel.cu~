@@ -77,12 +77,18 @@ __global__  void PerformRotationKernel( Matrix t, Matrix Point,Matrix New_Point)
 	
 
 }
+//Kernel Function to find the bin of the point
+__global__ void find_bin(double * x_coord, double range_x, double x_min, int numPts, double * bin_x)
+{
+	;
+}
+
 
 /// Kernel function to find the error : 
 
 /*
 
-__global__  void FindTotalErrorInCloud_Kernel(Vector index, Vector bin_index_x,Vector bin_index_y,Vector bin_index_z, float icp_error )
+__global__  void FindTotalErrorInCloud_Kernel(Vector index, Vector bin_index_x,Vector bin_index_y,Vector bin_index_z, float icp_error , Vector x_coord, Vector y_coord, Vector z_coord)
 {
 
 	int i = blockdim.x*blockIdx.x + threadIdx.x;

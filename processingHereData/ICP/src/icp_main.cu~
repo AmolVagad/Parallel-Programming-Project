@@ -60,7 +60,7 @@ Octree<std::vector<double>> octree_icp(bin_size);
 // Define the column vector 
 typedef dlib::matrix<double,0,1> column_vector;
 
-
+void cal_closest_points(const column_vector &rt);
 
 
 
@@ -333,7 +333,71 @@ int main()
 }
 
 
+//Calculating the closest point
+void cal_closest_points(const column_vector &rt)
+{
+	point_cloud_data transformed_data;
+	dlib::matrix<double> R(3,3);
+	dlib::matrix<double> t(3,1);
 
+	R = cos(rt(0)), -sin(rt(0)), 0,
+	    sin(rt(0)), cos(rt(0)), 0,
+	    0, 0, 1;
+
+	t = rt(1), rt(2), rt(3);
+
+	Matrix R_h, t_h;
+	R_h.width = 3;
+	R_h.height = 3;
+	t_h.width = 1;
+	t_h.height = 3;
+	// Allocating memory to the matrices 
+
+	R_h.elements = (double*)malloc(R_h.width*R_h.height*sizeof(double));
+	t_h.elements = (double*)malloc(t_h.width*t_h.height*sizeof(double));
+
+	R_h.elements[0] = R(0);R_h.elements[1]= R(1); R_h.elements[2]= R(2);
+	R_h.elements[3] = R(3);  R_h.elements[4]= R(4); R_h.elements[5]= R(5);
+	R_h.elements[6] = R(6); R_h.elements[7]= R(7); R_h.elements[8]= R(8);
+	
+	t_h.elements[0] = t(0);
+	t_h.elements[1]= t(1);
+	t_h.elements[2] = t(2);
+
+
+	PerformTransformationToAllPoints(R_h, t_h, &measurement_data, &transformed_data,1);
+
+	//Calculate the bin index of the points
+	double * x_coord_dev;
+	cudaMalloc((void**)&x_coord_dev, transformed_data.size*sizeof(double));
+	cudaMemcpy(x_coord_dev, transformed_data.x_coord.data(), transformed_data.size*sizeof(double), cudaMemcpyHostToDevice);
+
+	double * y_coord_dev;
+	cudaMalloc((void**)&y_coord_dev, transformed_data.size*sizeof(double));
+	cudaMemcpy(y_coord_dev, transformed_data.y_coord.data(), transformed_data.size*sizeof(double), cudaMemcpyHostToDevice);
+
+	double * z_coord_dev;
+	cudaMalloc((void**)&z_coord_dev, transformed_data.size*sizeof(double));
+	cudaMemcpy(z_coord_dev, transformed_data.z_coord.data(), transformed_data.size*sizeof(double), cudaMemcpyHostToDevice);
+
+	//Calculate the number of blocks and grid
+	dim3 block, grid;
+	block.x = TILE_WIDTH;
+	block.y = 1;
+	block.z = 1;
+	if(transformed_data.size%block.x == 0)
+		grid.x = transformed_data.size%block.x;
+	else
+		grid.x = transformed_data.size/block.x;
+	grid.y = 1;
+	grid.z = 1;
+	
+	
+	
+
+
+
+}
 
 
 
@@ -443,7 +507,7 @@ double findTotalErrorInCloudOnDevice(const Matrix rt) //This function can be wri
 
 	// Kernel Call 
 
-
+//-------Add kernel call function here --------------------
 
 	
 	
