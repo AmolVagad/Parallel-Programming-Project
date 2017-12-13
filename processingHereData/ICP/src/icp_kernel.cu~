@@ -22,7 +22,7 @@
 #include "globals.h"
 
 
-#define TILE_WIDTH 4 
+#define TILE_WIDTH 512 
 
 __global__  void PerformRotationKernel( Matrix t, Matrix Point,Matrix New_Point)
 {
@@ -106,6 +106,103 @@ __global__ void find_bin_z_kernel(double * z_coord_d, int numPts, int * bin_z_d)
 		int bin_z_temp = floor(((z_coord_d[t]  - z_min_d)/range_z_d)*bin_size_d);
 		bin_z_d[t] = max(min(bin_z_temp, bin_size_d - 1), 0);
 	}
+}
+
+__global__ void find_closest_point_i(double point_x, double point_y, double point_z, double * x_coord_model_d, double * y_coord_model_d, double * z_coord_model_d, int * bin_index_d, double * distance_d, int size_data)
+{
+	__shared__ double distance_s[2*TILE_WIDTH];
+	__shared__ unsigned int bin_smallest_index[TILE_WIDTH];
+	unsigned int t = threadIdx.x;
+	unsigned int start = 2*blockDim.x*blockIdx.x;
+
+	if(start + t < size_data)
+	{
+		distance_s[t] = sqrt(pow(x_coord_model_d[start + t] - point_x,2) + pow(y_coord_model_d[start + t] - point_y,2) + pow(z_coord_model_d[start + t] - point_z,2));	
+		bin_smallest_index[t] = 0; 	
+	}
+	else
+		distance_s[t] = 65535;
+	if(start + blockDim.x + t < size_data)
+	{
+		distance_s[blockDim.x + t] = sqrt(pow(x_coord_model_d[start + blockDim.x + t] - point_x,2) + pow(y_coord_model_d[start + blockDim.x + t] - point_y,2) + pow(z_coord_model_d[start + blockDim.x + t] - point_z,2));
+	}
+	else
+		distance_s[t] = 65535;
+
+	for(unsigned int stride = blockDim.x; stride >= 1; stride >>= 1)
+	{
+		__syncthreads();
+		if(t < stride)
+			if(distance_s[t] > distance_s[stride + t])
+			{
+				bin_smallest_index[t] = start + stride + t;
+				distance_s[t] = distance_s[stride + t];
+			}
+			else
+			{
+				bin_smallest_index[t] = start + t;	
+			}
+	}
+
+	if(t == 0)
+	{
+		distance_d[blockIdx.x] = distance_s[t];
+		bin_index_d[blockIdx.x] = bin_smallest_index[t];	
+	}
+
+	
+}
+
+__global__ void find_closest_point_2(double * distance_d, int * bin_index_d, int size_data)
+{
+	__shared__ double distance_s[2*TILE_WIDTH];
+	__shared__ unsigned int bin_smallest_index[TILE_WIDTH];
+	unsigned int t = threadIdx.x;
+	unsigned int start = 2*blockDim.x*blockIdx.x;
+	
+	if(start + t < size_data)
+	{
+		distance_s[t] = distance_d[start + t];
+		bin_smallest_index[t] = bin_index_d[start + t];
+	}
+	else
+	{
+		distance_s[t] = 65535;
+		bin_smallest_index[t] = 0;
+	}
+	if(start + blockDim.x + t < size_data)
+	{
+		distance_s[blockDim.x + t] = distance_d[start + blockDim.x + t];
+		bin_smallest_index[blockDim.x + t] = bin_index_d[start + blockDim.x + t];
+	}
+	else
+	{
+		distance_s[blockDim.x + t] = 65535;
+		bin_smallest_index[blockDim.x + t] = 0;
+	}
+
+	for(unsigned int stride = blockDim.x; stride >= 1; stride >>= 1)
+	{
+		__syncthreads();
+		if(t < stride)
+			if(distance_s[t] > distance_s[stride + t])
+			{
+				bin_smallest_index[t] = start + stride + t;
+				distance_s[t] = distance_s[stride + t];
+			}
+			else
+			{
+				bin_smallest_index[t] = start + t;	
+			}
+	}
+
+	if(t == 0)
+	{
+		distance_d[blockIdx.x] = distance_s[t];
+		bin_index_d[blockIdx.x] = bin_smallest_index[t];	
+	}
+
+
 }
 
 
