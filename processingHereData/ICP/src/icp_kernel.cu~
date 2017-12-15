@@ -22,7 +22,7 @@
 #include "globals.h"
 
 
-#define TILE_WIDTH 512 
+#define TILE_WIDTH 256 
 
 __global__  void PerformRotationKernel( Matrix t, Matrix Point,Matrix New_Point)
 {

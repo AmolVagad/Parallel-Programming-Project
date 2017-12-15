@@ -450,7 +450,7 @@ void cal_closest_points(Matrix rt)
 
 	
 	
-	for(int i=0; i < transformed_data.size; i++)
+	for(int i = 0; i < transformed_data.size; i++)
 	{	
 		dim3 block, grid;
 		block.x = TILE_WIDTH;
@@ -462,7 +462,7 @@ void cal_closest_points(Matrix rt)
 			grid.x = transformed_data.size/block.x + 1;
 		grid.y = 1;
 		grid.z = 1;
-		cout<<"Check grid "<<grid.x<<endl;
+		//cout<<"Check grid "<<grid.x<<endl;
 		int size_data = model_data.size;
 		double point_x = transformed_data.x_coord[i];
 		double point_y = transformed_data.y_coord[i];
@@ -482,7 +482,12 @@ void cal_closest_points(Matrix rt)
 
 		}		
 	}
-	
+	cudaMemcpy(measurement_data.index.data(), bin_index_d, transformed_data.size*sizeof(int), cudaMemcpyDeviceToHost);
+
+	for(int i = 0; i < transformed_data.size; i++)
+	{
+		cout<<"Print index values "<<measurement_data.index[i]<<endl;
+	}
 
 
 
