@@ -47,9 +47,6 @@ struct point_cloud_data{
 	std::vector <double> y_coord;
 	std::vector <double> z_coord;
 	std::vector <int> index;
-	std::vector <int> bin_index_x;
-	std::vector <int> bin_index_y;
-	std::vector <int> bin_index_z;
 	int size ;	
 };
 

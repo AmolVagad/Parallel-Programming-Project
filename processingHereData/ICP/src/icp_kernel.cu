@@ -24,89 +24,44 @@
 
 #define TILE_WIDTH 256 
 
-__global__  void PerformRotationKernel( Matrix t, Matrix Point,Matrix New_Point)
+__global__  void PerformRotationKernel( double * data_x, double * data_y, double * data_z, double * transformed_data_x, double * transformed_data_y, double * transformed_data_z, int n)
 {
 
 	// Create Matrices in the shared memory 
 	
-	__shared__ float t_s[3][1];
-	__shared__ float Point_s[TILE_WIDTH][3];
+	__shared__ double data_x_s[TILE_WIDTH];
+	__shared__ double data_y_s[TILE_WIDTH];
+	__shared__ double data_z_s[TILE_WIDTH];
 	
-	// Thread allocation 
-	int bx = blockIdx.x; int by = blockIdx.y;
-	int tx = threadIdx.x ; int ty = threadIdx.y;
-
+	// Thread allocation
+	int tx = threadIdx.x ;
+	int bx = blockDim.x*blockIdx.x;
+	int index = bx + tx;
 	// Generate rows and cols of Result point 
-	int row = by*TILE_WIDTH + ty;
-	int col = bx*TILE_WIDTH + tx;
-	float result = 0.00;
-
-	for (int n = 0; n <= (Point.width/TILE_WIDTH); ++n)
+	if(index < n)
 	{
-		if((n*TILE_WIDTH + ty) < Point.height && col < Point.width)   //Checking the boundary conditions for matrix Point
-			Point_s[ty][tx] = Point.elements[(n*TILE_WIDTH + ty)*Point.width + col];
-		else 
-			Point_s[ty][tx] = 0;
-		if((n*TILE_WIDTH + ty) < t.height && col < t.width)   //Checking the boundary conditions for matrix t
-			t_s[ty][tx] = t.elements[(n*TILE_WIDTH + ty)*t.width + col];
-		else 
-			t_s[ty][tx] = 0;
-	
+		data_x_s[tx] = data_x[index];
+		data_y_s[tx] = data_y[index];
+		data_z_s[tx] = data_z[index];
 	}
 	
 	__syncthreads();         // To ensure all elements of tile are loaded and consumed 
 
-	// carrying out the actual multiplication 
-	 if(ty < TILE_WIDTH && tx < TILE_WIDTH)
-	 {
-	 	for(int i = 0; i < 3; i++)
-		{
-    			for(int j = 0; j < 3; j++)
-    			{
-				result += R_constant[i*3 + j]*Point_s[i+ty][j]+ t_s[i][j];
-    			}
-		}
-	 }
-
-
+	// carrying out the rotation operation 
+	double point_x = data_x_s[tx]*R_constant[0] + data_y_s[tx]*R_constant[1] + data_z_s[tx]*R_constant[2] + t_constant[0];
+	double point_y = data_x_s[tx]*R_constant[3] + data_y_s[tx]*R_constant[4] + data_z_s[tx]*R_constant[5] + t_constant[1];
+	double point_z = data_x_s[tx]*R_constant[6] + data_y_s[tx]*R_constant[7] + data_z_s[tx]*R_constant[8] + t_constant[2];
+	
          __syncthreads();        // To ensure all elements of tile are loaded and consumed 
 
-	if(row < 3 && col < t.width)                    //Checking the boundary conditions for matrix new_point
-	 New_Point.elements[row*t.width + col] = result;
-
-	
-
-}
-//Kernel Function to find the bin of the point
-__global__ void find_bin_x_kernel(double * x_coord_d, int numPts, int * bin_x_d)
-{
-	int t = blockIdx.x*blockDim.x + threadIdx.x;
-	if(t < numPts)
+	if(index < n)
 	{
-		int bin_x_temp = floor(((x_coord_d[t]  - x_min_d)/range_x_d)*bin_size_d);
-		bin_x_d[t] = max(min(bin_x_temp, bin_size_d - 1), 0);
-	}
+		transformed_data_x[index] = point_x;
+		transformed_data_y[index] = point_y;
+		transformed_data_z[index] = point_z;
+	}      
 }
 
-__global__ void find_bin_y_kernel(double * y_coord_d, int numPts, int * bin_y_d)
-{
-	int t = blockIdx.x*blockDim.x + threadIdx.x;
-	if(t < numPts)
-	{
-		int bin_y_temp = floor(((y_coord_d[t]  - y_min_d)/range_y_d)*bin_size_d);
-		bin_y_d[t] = max(min(bin_y_temp, bin_size_d - 1), 0);
-	}
-}
-
-__global__ void find_bin_z_kernel(double * z_coord_d, int numPts, int * bin_z_d)
-{
-	int t = blockIdx.x*blockDim.x + threadIdx.x;
-	if(t < numPts)
-	{
-		int bin_z_temp = floor(((z_coord_d[t]  - z_min_d)/range_z_d)*bin_size_d);
-		bin_z_d[t] = max(min(bin_z_temp, bin_size_d - 1), 0);
-	}
-}
 
 __global__ void find_closest_point_i(double point_x, double point_y, double point_z, double * x_coord_model_d, double * y_coord_model_d, double * z_coord_model_d, int * bin_index_d, double * distance_d, int size_data)
 {
@@ -156,7 +111,7 @@ __global__ void find_closest_point_i(double point_x, double point_y, double poin
 __global__ void find_closest_point_2(double * distance_d, int * bin_index_d, int size_data)
 {
 	__shared__ double distance_s[2*TILE_WIDTH];
-	__shared__ unsigned int bin_smallest_index[TILE_WIDTH];
+	__shared__ unsigned int bin_smallest_index[2*TILE_WIDTH];
 	unsigned int t = threadIdx.x;
 	unsigned int start = 2*blockDim.x*blockIdx.x;
 	
@@ -187,13 +142,10 @@ __global__ void find_closest_point_2(double * distance_d, int * bin_index_d, int
 		if(t < stride)
 			if(distance_s[t] > distance_s[stride + t])
 			{
-				bin_smallest_index[t] = start + stride + t;
+				bin_smallest_index[t] = bin_smallest_index[stride + t];
 				distance_s[t] = distance_s[stride + t];
 			}
-			else
-			{
-				bin_smallest_index[t] = start + t;	
-			}
+			
 	}
 
 	if(t == 0)

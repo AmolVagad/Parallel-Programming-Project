@@ -22,51 +22,28 @@ extern "C"
 
 using namespace std;
 
+typedef dlib::matrix<double,0,1> column_vector;
 
 __constant__ double R_constant[9];
-__constant__ double range_x_d;
-__constant__ double range_y_d;
-__constant__ double range_z_d;
-__constant__ double x_min_d;
-__constant__ double y_min_d;
-__constant__ double z_min_d;
-__constant__ int bin_size_d;
+__constant__ double t_constant[3];
 
+#include "icp_kernel.cu"
 
 // Function declarations
 Matrix AllocateDeviceMatrix(const Matrix M);
 double findTotalErrorInCloudOnDevice(const Matrix rt);
 Vector AllocateDeviceVector(const Vector V);
-#include "icp_kernel.cu"
+
 
 
 // Creating variables to store the measurement and model data
-
-	point_cloud_data measurement_data;
-	point_cloud_data model_data;
-
-	int bin_size = 4;
-
-	double min_x =0;
-	double min_y = 0;
-	double min_z = 0;
-	double range_x = 0;
-	double range_y = 0;
-	double range_z = 0;
-
+point_cloud_data measurement_data;
+point_cloud_data model_data;
 
 
 	
 
 ///// For initial testing purposes carrying out rotation and translation operation on cuda//////////////////
-
-
-
-// Define Octree 
-Octree<std::vector<double>> octree_icp(bin_size); 
-
-// Define the column vector 
-typedef dlib::matrix<double,0,1> column_vector;
 
 void cal_closest_points(Matrix rt);
 
@@ -74,101 +51,85 @@ void cal_closest_points(Matrix rt);
 
 // Function to carry out Rotation of given point on the device 
 
-double* PerformRotationOnDevice(const Matrix R_h, const Matrix t_h, const Matrix Point_h, Matrix Rotated_Point_h)
+void PerformRotationOnDevice(const Matrix R_h, const Matrix t_h, point_cloud_data * data, point_cloud_data * transformed_data)
 {
-	
-	
-	int size_T = t_h.width*t_h.height*sizeof(double);
-	int size_Point = Point_h.width*Point_h.height*sizeof(double);
-	// Declare the device variables 
-	
-	
-	
-	// Allocate memory on the device
-	
-	
-	Matrix t_d = AllocateDeviceMatrix(t_h);
-	Matrix Point_d = AllocateDeviceMatrix(Point_h);
-	
-	// Copy from host to device 
-	
-	
-        cudaMemcpy(t_d.elements,t_h.elements,size_T, cudaMemcpyHostToDevice);
+	int size_data = data->size;
+
+//***********Allocate Memory on device********************
+
+	double * data_x_d;
+	cudaMalloc((void**)&data_x_d, size_data*sizeof(double));
+	double * data_y_d;
+	cudaMalloc((void**)&data_y_d, size_data*sizeof(double));
+	double * data_z_d;
+	cudaMalloc((void**)&data_z_d, size_data*sizeof(double));
+
+	double * transformed_data_x_d;
+	cudaMalloc((void**)&transformed_data_x_d, size_data*sizeof(double));
+	double * transformed_data_y_d;
+	cudaMalloc((void**)&transformed_data_y_d, size_data*sizeof(double));
+	double * transformed_data_z_d;
+	cudaMalloc((void**)&transformed_data_z_d, size_data*sizeof(double));
+
+	//Allocate temporary memory for x,y,x
+	double * temp_x = (double*)malloc(size_data*sizeof(double));
+	double * temp_y = (double*)malloc(size_data*sizeof(double));
+	double * temp_z = (double*)malloc(size_data*sizeof(double));
+
+//---------------------------------------------------------
+
+//**************Copy data to Device and constant memory******
 		
-	cudaMemcpy(Point_d.elements,Point_h.elements,size_Point, cudaMemcpyHostToDevice);
+	cudaMemcpy(data_x_d, data->x_coord.data(), size_data*sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(data_y_d, data->y_coord.data(), size_data*sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(data_z_d, data->z_coord.data(), size_data*sizeof(double), cudaMemcpyHostToDevice);
 	
-	
-	// Allocate device memory for result 
-	Matrix Rotated_Point_d = AllocateDeviceMatrix(Rotated_Point_h);
-	
-	
-	// Kernel Call 
-	 
- // Setup the execution configuration
-    	int blocks_w = R_h.width/TILE_WIDTH ;
-    	int blocks_h = Point_h.height /TILE_WIDTH;
-    
-   
-	if(t_h.width % TILE_WIDTH)
-		blocks_w ++;
-
-	if(R_h.height % TILE_WIDTH)
-		blocks_h ++;
-		         
-	dim3 dimGrid(blocks_w, blocks_h, 1);
-
-	dim3 dimBlock(TILE_WIDTH, TILE_WIDTH,1);
-
 	cudaMemcpyToSymbol(R_constant,R_h.elements,3 * 3*sizeof(double));
+	cudaMemcpyToSymbol(t_constant, t_h.elements,3*sizeof(double), cudaMemcpyHostToDevice);
+	
+//----------------------------------------------------------- 
+	 
+//******Setup the execution configuration*********************
+
+	dim3 block, grid;
+	block.x = TILE_WIDTH;
+	block.y = 1;
+	block.z = 1;
+	
+	if(size_data%block.x == 0)
+		grid.x = size_data/block.x;
+	else
+		grid.x = size_data/block.x + 1;
+	grid.y = 1;
+	grid.z = 1;
+
+//--------------------------------------------------------------
 
     // Launch the device computation threads!
 
-     PerformRotationKernel<<<dimGrid,dimBlock>>>(t_d, Point_d, Rotated_Point_d);
+	PerformRotationKernel<<<grid,block>>>(data_x_d, data_y_d, data_z_d, transformed_data_x_d, transformed_data_y_d, transformed_data_z_d, size_data);
 		
 	// Transfer Rotated Point from device to host
-     cudaMemcpy(Rotated_Point_h.elements, Rotated_Point_d.elements, size_T, cudaMemcpyDeviceToHost);
-       // Free device memory for all
-     cudaFree(t_d.elements); cudaFree (Point_d.elements);cudaFree (Rotated_Point_d.elements);
-     
-     return Rotated_Point_h.elements;	
 	
-}
-
-
-
-
-
-
-// Function that calls transformation function and stores the transformed values 
-
-void PerformTransformationToAllPoints(const Matrix R,const Matrix t, point_cloud_data * data, point_cloud_data * transformed_data, int skips)
-{
-	Matrix point, rotated_point;
-	rotated_point.height =3;
-	rotated_point.width = 1; 
-	point.height = data->x_coord.size();
-	point.width = 3; 
-	point.elements = (double*)malloc(3*data->size*sizeof(double));
-	rotated_point.elements = (double*)malloc(rotated_point.width*rotated_point.height*sizeof(double));
-	for(int i  = 0; i < data->size; i++)
+	cudaMemcpy(temp_x, transformed_data_x_d, size_data*sizeof(double), cudaMemcpyDeviceToHost);
+	cudaMemcpy(temp_y, transformed_data_y_d, size_data*sizeof(double), cudaMemcpyDeviceToHost);
+	cudaMemcpy(temp_z, transformed_data_z_d, size_data*sizeof(double), cudaMemcpyDeviceToHost);
+	
+	for(int i = 0; i < size_data; i++)
 	{
-		
-		
-		point.elements[i+0] = data->x_coord.at(i);
-		point.elements[i+1] = data->y_coord.at(i);
-		point.elements[i+2] = data->z_coord.at(i);
-			
-		transformed_data->x_coord.push_back(rotated_point.elements[0]);
-		transformed_data->y_coord.push_back(rotated_point.elements[1]);
-		transformed_data->z_coord.push_back(rotated_point.elements[2]);		 
+		transformed_data->x_coord.push_back(temp_x[i]);
+		transformed_data->y_coord.push_back(temp_y[i]);
+		transformed_data->z_coord.push_back(temp_z[i]);
+		transformed_data->index.push_back(-1);
 	}
+
+	transformed_data->size = data->size;
 	
-	transformed_data->size = transformed_data->x_coord.size();
-	rotated_point.elements = PerformRotationOnDevice(R, t, point, rotated_point);
+	
+       // Free device memory for all
+       cudaFree(data_x_d); cudaFree (data_y_d);cudaFree (data_z_d);	
 	
 }
-
-
 
 
 
@@ -199,10 +160,6 @@ int main()
 		model_data.y_coord.push_back(strtod(y.c_str(),&pEnd));
 		model_data.z_coord.push_back(strtod(z.c_str(),&pEnd));
 		measurement_data.index.push_back(-1);
-		measurement_data.bin_index_x.push_back(-1);
-		measurement_data.bin_index_y.push_back(-1);
-		measurement_data.bin_index_z.push_back(-1);
-	
 	}
 	
 
@@ -212,59 +169,13 @@ int main()
 	model_data.y_coord.pop_back();
 	model_data.z_coord.pop_back();
 	model_data.size = model_data.size - 1;
-
-
 	
-	// Calculating the min and max values of x,y,z
-	double max_x =  *max_element(model_data.x_coord.begin(),model_data.x_coord.end()) ;
-	double max_y =  *max_element(model_data.y_coord.begin(),model_data.y_coord.end()) ;
-	double max_z =  *max_element(model_data.z_coord.begin(),model_data.z_coord.end()) ;
-	min_x =  *min_element(model_data.x_coord.begin(),model_data.x_coord.end()) ;
-	min_y =  *min_element(model_data.y_coord.begin(),model_data.y_coord.end()) ;
-	min_z =  *min_element(model_data.z_coord.begin(),model_data.z_coord.end()) ;
-	
-	
-	//cout<<"Min x value "<<min_x<<endl;
-	// Calculating the range
-	range_x = max_x - min_x; 
-	range_y = max_y - min_y; 
-	range_z = max_z - min_z;
 		
 	//cout<<"Range x value "<<range_x<<endl;
 
 	model_data.size = model_data.x_coord.size();
 	//cout<<"model data value "<<model_data.size<<endl;
 	
-	
-	// Storing the data into Octrees 
-	for(int i= 0; i < model_data.size; i++)
-	{
-		int index_x = 0;
-		int index_y = 0;
-		int index_z = 0;
-		
-		index_x = floor(((model_data.x_coord.at(i)  - min_x)/range_x)*bin_size);
-		index_y= floor(((model_data.y_coord.at(i)  - min_y)/range_y)*bin_size);
-		index_z = floor(((model_data.z_coord.at(i)  - min_z)/range_z)*bin_size);
-		
-		// Boundary conditon 
-		index_x = min(index_x, bin_size - 1);
-		index_y = min(index_y, bin_size - 1);
-		index_z = min(index_z, bin_size - 1);
-		
-		
-		octree_icp(index_x, index_y, index_z).push_back(model_data.x_coord.at(i));
-		octree_icp(index_x, index_y, index_z).push_back(model_data.y_coord.at(i));
-		octree_icp(index_x, index_y, index_z).push_back(model_data.z_coord.at(i));
-		
-	}
-	
-
-	
-			
-		
-	
-
 	//Rotational function test
 	double theta = 0.03;
 	double point_x = 0.003;
@@ -291,7 +202,7 @@ int main()
 	
 	
 	// Generate mesasurement datra by rorating the model data
-	PerformTransformationToAllPoints(R, t, &model_data, &measurement_data,1);
+	PerformRotationOnDevice(R, t, &model_data, &measurement_data);
 
 	
 
@@ -309,7 +220,7 @@ int main()
 
 	double temp_error = 0;	
 	double cpu_starttime , cpu_endtime;
-	temp_error = findTotalErrorInCloudOnDevice(rt);
+	//temp_error = findTotalErrorInCloudOnDevice(rt);
 	cpu_starttime = clock();
 	cal_closest_points(rt);
 	cpu_endtime = clock();
@@ -369,84 +280,26 @@ void cal_closest_points(Matrix rt)
 	t_h.elements[2] = rt.elements[3];
 
 
-	PerformTransformationToAllPoints(R_h, t_h, &measurement_data, &transformed_data,1);
-	/*
-	//Calculate the bin index of the points
-	double * x_coord_dev;
-	cudaMalloc((void**)&x_coord_dev, transformed_data.size*sizeof(double));
-	cudaMemcpy(x_coord_dev, transformed_data.x_coord.data(), transformed_data.size*sizeof(double), cudaMemcpyHostToDevice);
-
-	double * y_coord_dev;
-	cudaMalloc((void**)&y_coord_dev, transformed_data.size*sizeof(double));
-	cudaMemcpy(y_coord_dev, transformed_data.y_coord.data(), transformed_data.size*sizeof(double), cudaMemcpyHostToDevice);
-
-	double * z_coord_dev;
-	cudaMalloc((void**)&z_coord_dev, transformed_data.size*sizeof(double));
-	cudaMemcpy(z_coord_dev, transformed_data.z_coord.data(), transformed_data.size*sizeof(double), cudaMemcpyHostToDevice);
-
-	int * bin_x_d;
-	cudaMalloc((void**)&bin_x_d, transformed_data.size*sizeof(int));
-
-	int * bin_y_d;
-	cudaMalloc((void**)&bin_y_d, transformed_data.size*sizeof(int));
-
-	int * bin_z_d;
-	cudaMalloc((void**)&bin_z_d, transformed_data.size*sizeof(int));
-
-	cudaMemcpyToSymbol(&range_x_d, &range_x, sizeof(double));
-	cudaMemcpyToSymbol(&range_y_d, &range_y, sizeof(double));
-	cudaMemcpyToSymbol(&range_z_d, &range_z, sizeof(double));
-	cudaMemcpyToSymbol(&x_min_d, &min_x, sizeof(double));
-	cudaMemcpyToSymbol(&y_min_d, &min_y, sizeof(double));
-	cudaMemcpyToSymbol(&z_min_d, &min_z, sizeof(double));
-	cudaMemcpyToSymbol(&bin_size_d, &bin_size, sizeof(int));
-
-
-	//Calculate the number of blocks and grid
-	dim3 block, grid;
-	block.x = TILE_WIDTH;
-	block.y = 1;
-	block.z = 1;
-	if(transformed_data.size%block.x == 0)
-		grid.x = transformed_data.size%block.x;
-	else
-		grid.x = transformed_data.size/block.x;
-	grid.y = 1;
-	grid.z = 1;
-
-	find_bin_x_kernel<<<grid, block>>>(x_coord_dev, transformed_data.size, bin_x_d);
-	find_bin_y_kernel<<<grid, block>>>(y_coord_dev, transformed_data.size, bin_y_d);
-	find_bin_z_kernel<<<grid, block>>>(z_coord_dev, transformed_data.size, bin_z_d);
-
-	cudaDeviceSynchronize();
-
-	int * bin_x = (int*)malloc(transformed_data.size*sizeof(int));
-	int * bin_y = (int*)malloc(transformed_data.size*sizeof(int));
-	int * bin_z = (int*)malloc(transformed_data.size*sizeof(int));
-
-	cudaMemcpy(bin_x, bin_x_d, transformed_data.size*sizeof(int), cudaMemcpyDeviceToHost);
-	cudaMemcpy(bin_y, bin_y_d, transformed_data.size*sizeof(int), cudaMemcpyDeviceToHost);
-	cudaMemcpy(bin_z, bin_z_d, transformed_data.size*sizeof(int), cudaMemcpyDeviceToHost);
-	*/
-
+	PerformRotationOnDevice(R_h, t_h, &measurement_data, &transformed_data);
+		
 	//Calculate the closest point
 	double * x_coord_model_d;
 	cudaMalloc((void**)&x_coord_model_d, model_data.size*sizeof(double));
 	cudaMemcpy(x_coord_model_d, model_data.x_coord.data(), model_data.size*sizeof(double), cudaMemcpyHostToDevice);
-
+	
 	double * y_coord_model_d;
 	cudaMalloc((void**)&y_coord_model_d, model_data.size*sizeof(double));
 	cudaMemcpy(y_coord_model_d, model_data.y_coord.data(), model_data.size*sizeof(double), cudaMemcpyHostToDevice);
-
+	
 	double * z_coord_model_d;
 	cudaMalloc((void**)&z_coord_model_d, model_data.size*sizeof(double));
 	cudaMemcpy(z_coord_model_d, model_data.z_coord.data(), model_data.size*sizeof(double), cudaMemcpyHostToDevice);
-
+	
 	double * distance_d;
 	cudaMalloc((void**)&distance_d, model_data.size*sizeof(double));
 
-	int * bin_index_d;	
-	cudaMalloc((void**)&bin_index_d, model_data.size*sizeof(int));
+	int * index_d;	
+	cudaMalloc((void**)&index_d, model_data.size*sizeof(int));
 
 	
 	
@@ -468,8 +321,8 @@ void cal_closest_points(Matrix rt)
 		double point_y = transformed_data.y_coord[i];
 		double point_z = transformed_data.z_coord[i];
 		
-		find_closest_point_i<<<grid, block>>>(point_x, point_y, point_z, x_coord_model_d, y_coord_model_d, z_coord_model_d, bin_index_d + i, distance_d + i, size_data);
-			
+		find_closest_point_i<<<grid, block>>>(point_x, point_y, point_z, x_coord_model_d, y_coord_model_d, z_coord_model_d, index_d + i, distance_d + i, size_data);
+	
 		while(grid.x > 1)
 		{	
 			//cout<<"Check grid 2 "<<grid.x<<endl;
@@ -478,16 +331,21 @@ void cal_closest_points(Matrix rt)
 				grid.x = grid.x/block.x;
 			else
 				grid.x = grid.x/block.x + 1;
-			find_closest_point_2<<<grid,block>>>(distance_d + i, bin_index_d + i, size_data);
+			
 
+
+			find_closest_point_2<<<grid,block>>>(distance_d + i, index_d + i, size_data);
 		}		
-	}
-	cudaMemcpy(measurement_data.index.data(), bin_index_d, transformed_data.size*sizeof(int), cudaMemcpyDeviceToHost);
+		
+		//cout<<"Check index "<<measurement_data.index[0]<<endl;
 
-	for(int i = 0; i < transformed_data.size; i++)
-	{
-		cout<<"Print index values "<<measurement_data.index[i]<<endl;
 	}
+	cudaMemcpy(measurement_data.index.data(), index_d, transformed_data.size*sizeof(int), cudaMemcpyDeviceToHost);
+	for(int i = 0; i < model_data.size; i++)
+	{
+		if(measurement_data.index[i] < 100)
+		cout<<"Index values are "<<measurement_data.index[i]<<endl;
+	}	
 
 
 
@@ -506,7 +364,7 @@ void cal_closest_points(Matrix rt)
 
 
 
-
+/*
 
 double findTotalErrorInCloudOnDevice(const Matrix rt) //This function can be written parallelly using Atomic Add operation
 {
@@ -525,7 +383,7 @@ double findTotalErrorInCloudOnDevice(const Matrix rt) //This function can be wri
 	t.elements[1] =  rt.elements[2];
 	t.elements[2] =  rt.elements[3];
 	//cout<<"Check measurement data element "<<measurement_data.x_coord.at(0)<<endl;
-	PerformTransformationToAllPoints(R, t, &measurement_data, &transformed_data,1);
+	PerformRotationOnDevice(R, t, &measurement_data, &transformed_data);
 
 
 	// Creating device variables 
@@ -597,7 +455,7 @@ double findTotalErrorInCloudOnDevice(const Matrix rt) //This function can be wri
 	
 	cudaMemcpy(bin_index_z_device.elements,measurement_data.bin_index_z.data(),size_var*sizeof(int), cudaMemcpyHostToDevice);
 
-
+*/
 
 	// Kernel Call 
 
@@ -632,8 +490,8 @@ double findTotalErrorInCloudOnDevice(const Matrix rt) //This function can be wri
 	}
 	
 */
-	return icp_error;
-}
+	//return icp_error;
+//}
 
 // Function to allocate matrix memory on the device
  
