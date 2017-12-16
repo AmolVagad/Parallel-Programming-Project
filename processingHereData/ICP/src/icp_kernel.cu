@@ -157,29 +157,44 @@ __global__ void find_closest_point_2(double * distance_d, int * bin_index_d, int
 
 }
 
-
-/// Kernel function to find the error : 
-
-/*
-
-__global__  void FindTotalErrorInCloud_Kernel(Vector index, Vector bin_index_x,Vector bin_index_y,Vector bin_index_z, float icp_error , Vector x_coord, Vector y_coord, Vector z_coord)
+__global__ void CalculateDistanceAllPoints(double * data_x_d, double * data_y_d, double * data_z_d, double * transformed_data_x_d, double * transformed_data_y_d, double * transformed_data_z_d, int * index_d, double * distance_d, int size_data)
 {
+	int i = blockIdx.x*blockDim.x + threadIdx.x;
 
-	int i = blockdim.x*blockIdx.x + threadIdx.x;
-	float error = 0.0f;
-	int x_Idx = bin_index_x.elements[i];
-	int y_Idx = bin_index_y.elements[i];
-	int z_Idx = bin_index_z.elements[i];
-	int j = index.elements[i];
-
-	icp_error +=sqrt(pow((transformed_data.x_coord[i] - octree_icp(x_Idx, y_Idx, z_Idx)[3*j]),2) + pow((transformed_data.y_coord[i] - octree_icp(x_Idx, y_Idx, z_Idx)[3*j + 1]),2) + pow((transformed_data.z_coord[i] - octree_icp(x_Idx, y_Idx, z_Idx)[3*j + 2]),2)); 
-
-
-
+	if(i < size_data)
+	{
+		int index = index_d[i];
+		distance_d[i] = sqrt(pow(data_x_d[index] - transformed_data_x_d[i],2) + pow(data_y_d[index] - transformed_data_y_d[i],2) + pow(data_z_d[index] - transformed_data_z_d[i],2));
+	}
 }
 
-*/
+__global__ void CalculateTotalError(double * distance_d, int size_data)
+{
+	__shared__ double error_s[2*TILE_WIDTH];
 
+	unsigned int t = threadIdx.x;
+        unsigned int start = 2*blockDim.x*blockIdx.x;
+
+        if(start + t < size_data)   
+    		error_s[t] = distance_d[start + t];
+        else
+		error_s[t] = 0.0f;
+        if(start + blockDim.x + t < size_data)
+    		error_s[blockDim.x + t] = distance_d[start + blockDim.x + t];
+        else
+		error_s[blockDim.x + t] = 0.0f;
+
+	for(unsigned int stride = blockDim.x; stride >= 1; stride >>= 1)
+	{
+		__syncthreads();
+		if(t < stride)
+	    		error_s[t] += error_s[t + stride];
+	}
+
+	if(t == 0)
+		distance_d[blockIdx.x] = error_s[t];
+
+}
 
 
 

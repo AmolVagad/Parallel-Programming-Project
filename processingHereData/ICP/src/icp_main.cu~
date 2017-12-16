@@ -46,7 +46,7 @@ point_cloud_data model_data;
 ///// For initial testing purposes carrying out rotation and translation operation on cuda//////////////////
 
 void cal_closest_points(Matrix rt);
-
+double findTotalErrorInCloudOnDevice(const column_vector &rt);
 
 
 // Function to carry out Rotation of given point on the device 
@@ -211,16 +211,18 @@ int main()
 	Matrix  rt;
 	rt.width =  1;
 	rt.height =  4;
-	column_vector rt_lower(4), rt_upper(4);
+	column_vector rt_lower(4), rt_upper(4), rt_vec(4);
 	rt.elements = (double*)malloc(rt.width*rt.height*sizeof(double));
 	rt.elements[0] = 0;rt.elements[1] = 0;
 	rt.elements[2] = 0;rt.elements[3] = 0;
+	
+	rt_vec = rt.elements[0], rt.elements[1], rt.elements[2], rt.elements[3];	
 	rt_lower = -1.0, -1.0,-1.0,-1.0;
 	rt_upper = 1.0, 1.0, 1.0, 1.0;
 
 	double temp_error = 0;	
 	double cpu_starttime , cpu_endtime;
-	//temp_error = findTotalErrorInCloudOnDevice(rt);
+	temp_error = findTotalErrorInCloudOnDevice(rt_vec);
 	cpu_starttime = clock();
 	cal_closest_points(rt);
 	cpu_endtime = clock();
@@ -321,7 +323,7 @@ void cal_closest_points(Matrix rt)
 		double point_y = transformed_data.y_coord[i];
 		double point_z = transformed_data.z_coord[i];
 		
-		find_closest_point_i<<<grid, block>>>(point_x, point_y, point_z, x_coord_model_d, y_coord_model_d, z_coord_model_d, index_d + i, distance_d + i, size_data);
+		find_closest_point_i<<<grid, block>>>(point_x, point_y, point_z, x_coord_model_d, y_coord_model_d, z_coord_model_d, index_d, distance_d, size_data);
 	
 		while(grid.x > 1)
 		{	
@@ -334,18 +336,20 @@ void cal_closest_points(Matrix rt)
 			
 
 
-			find_closest_point_2<<<grid,block>>>(distance_d + i, index_d + i, size_data);
+			find_closest_point_2<<<grid,block>>>(distance_d, index_d, size_data);
 		}		
-		
+		cudaMemcpy(measurement_data.index.data() + i, index_d, sizeof(int), cudaMemcpyDeviceToHost);
 		//cout<<"Check index "<<measurement_data.index[0]<<endl;
 
 	}
-	cudaMemcpy(measurement_data.index.data(), index_d, transformed_data.size*sizeof(int), cudaMemcpyDeviceToHost);
-	for(int i = 0; i < model_data.size; i++)
-	{
+	//cudaMemcpy(measurement_data.index.data(), bin_index_d, transformed_data.size*sizeof(int), cudaMemcpyDeviceToHost);
+
+	for(int i = 0; i < transformed_data.size; i++)
+	{	
 		if(measurement_data.index[i] < 100)
-		cout<<"Index values are "<<measurement_data.index[i]<<endl;
-	}	
+		cout<<"Print index values "<<measurement_data.index[i]<<endl;
+	}
+	cout<<"Transformed data size "<<transformed_data.size<<endl;
 
 
 
@@ -364,9 +368,9 @@ void cal_closest_points(Matrix rt)
 
 
 
-/*
 
-double findTotalErrorInCloudOnDevice(const Matrix rt) //This function can be written parallelly using Atomic Add operation
+
+double findTotalErrorInCloudOnDevice(const column_vector &rt) //This function can be written parallelly using Atomic Add operation
 {
 	//iterations++;
 	double icp_error = 0.0;
@@ -377,121 +381,50 @@ double findTotalErrorInCloudOnDevice(const Matrix rt) //This function can be wri
 	t.elements = (double*)malloc(t.width*t.height*sizeof(double));
 
 	
-	R.elements[0] = cos(rt.elements[0]);R.elements[1] = -sin(rt.elements[0]);R.elements[2] = 0; R.elements[3] = sin(rt.elements[0]);R.elements[4] = cos(rt.elements[0]);R.elements[5] = 0;
+	R.elements[0] = cos(rt(0));R.elements[1] = -sin(rt(0));R.elements[2] = 0; R.elements[3] = sin(rt(0));R.elements[4] = cos(rt(0));R.elements[5] = 0;
 	R.elements[6] = 0; R.elements[7] = 0; R.elements[8] = 1;
-	t.elements[0] = rt.elements[1];
-	t.elements[1] =  rt.elements[2];
-	t.elements[2] =  rt.elements[3];
+	t.elements[0] = rt(1);
+	t.elements[1] =  rt(2);
+	t.elements[2] =  rt(3);
 	//cout<<"Check measurement data element "<<measurement_data.x_coord.at(0)<<endl;
 	PerformRotationOnDevice(R, t, &measurement_data, &transformed_data);
 
 
 	// Creating device variables 
-
-	Vector bin_index_x_device,bin_index_y_device, bin_index_z_device,index_device,transform_x_device,transform_y_device,transform_z_device ;
-	
-	
-
-	index_device.size = measurement_data.index.size();
-
-	
-	bin_index_x_device.size = measurement_data.bin_index_x.size();
-	bin_index_y_device.size = measurement_data.bin_index_y.size();
-	bin_index_z_device.size = measurement_data.bin_index_z.size();
-
-	transform_x_device.size = transformed_data.x_coord.size();
-	transform_y_device.size = transformed_data.y_coord.size();
-	transform_z_device.size = transformed_data.z_coord.size();
-
-
-	int size_var = bin_index_x_device.size;
-
-	float* error_on_hostt,error_on_device ;
-	
-	// Allocate memory and copy to device 	
-
-
-
-	cudaMalloc((void**)&error_on_device,sizeof(float));
-	
-	
-	cudaMalloc((void**)&transform_x_device.elements,transform_x_device.size*sizeof(double));
-	
-	cudaMemcpy(transform_x_device.elements,transformed_data.x_coord.data(),transform_x_device.size*sizeof(double), cudaMemcpyHostToDevice);
-
-
-
-
-	cudaMalloc((void**)&transform_y_device.elements,transform_y_device.size*sizeof(double));
-	
-	cudaMemcpy(transform_y_device.elements,transformed_data.y_coord.data(),transform_y_device.size*sizeof(double), cudaMemcpyHostToDevice);
-
-
-	cudaMalloc((void**)&transform_z_device.elements,transform_z_device.size*sizeof(double));
-	
-	cudaMemcpy(transform_z_device.elements,transformed_data.z_coord.data(),transform_z_device.size*sizeof(double), cudaMemcpyHostToDevice);
-		
-	
-
-
-	
-	cudaMalloc((void**)&bin_index_x_device.elements,size_var*sizeof(int));
-	
-	cudaMemcpy(bin_index_x_device.elements,measurement_data.bin_index_x.data(),size_var*sizeof(int), cudaMemcpyHostToDevice);
-
-
-	cudaMalloc((void**)&bin_index_y_device.elements,size_var*sizeof(int));
-	
-	cudaMemcpy(bin_index_y_device.elements,measurement_data.bin_index_y.data(),size_var*sizeof(int), cudaMemcpyHostToDevice);
-
-
-	cudaMalloc((void**)&bin_index_z_device.elements,size_var*sizeof(int));
-	
-	cudaMemcpy(bin_index_z_device.elements,measurement_data.bin_index_z.data(),size_var*sizeof(int), cudaMemcpyHostToDevice);
-
-
-
-	cudaMalloc((void**)&bin_index_z_device.elements,size_var*sizeof(int));
-	
-	cudaMemcpy(bin_index_z_device.elements,measurement_data.bin_index_z.data(),size_var*sizeof(int), cudaMemcpyHostToDevice);
-
-*/
-
-	// Kernel Call 
-
-//-------Add kernel call function here --------------------
-
-	
-	
-	
-
-	
-
-	
-	//cout<<"Measurement data size "<<measurement_data.size<<endl;
-	/*
-	
-
-
-
-	for(int i = 0; i < measurement_data.size; i++)
-	{
-		
-		int j = measurement_data.index[i];
-		int x_Idx = measurement_data.bin_index_x[i];
-		int y_Idx = measurement_data.bin_index_y[i];
-		int z_Idx = measurement_data.bin_index_z[i];
+	double * data_x_d;
+	double * data_y_d;
+	double * data_z_d;
+	int * index_d;
+	double * transformed_data_x_d;
+	double * transformed_data_y_d;
+	double * transformed_data_z_d;
+	double * distance_d;	
+	int size_data = transformed_data.size;
 		
 
-		
-		icp_error +=sqrt(pow((transformed_data.x_coord[i] - octree_icp(x_Idx, y_Idx, z_Idx)[3*j]),2) + pow((transformed_data.y_coord[i] - octree_icp(x_Idx, y_Idx, z_Idx)[3*j + 1]),2) + pow((transformed_data.z_coord[i] - octree_icp(x_Idx, y_Idx, z_Idx)[3*j + 2]),2)); 
 
-		
-	}
+	cudaMalloc((void**)&data_x_d, size_data*sizeof(double));
+	cudaMalloc((void**)&data_y_d, size_data*sizeof(double));
+	cudaMalloc((void**)&data_z_d, size_data*sizeof(double));
+	cudaMalloc((void**)&transformed_data_x_d, size_data*sizeof(double));
+	cudaMalloc((void**)&transformed_data_y_d, size_data*sizeof(double));
+	cudaMalloc((void**)&transformed_data_z_d, size_data*sizeof(double));
+	cudaMalloc((void**)&distance_d, size_data*sizeof(double));
+	cudaMalloc((void**)&index_d, size_data*sizeof(int));
+
+
+	cudaMemcpy(data_x_d, model_data.x_coord.data(), size_data*sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(data_y_d, model_data.y_coord.data(), size_data*sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(data_z_d, model_data.z_coord.data(), size_data*sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(transformed_data_x_d, transformed_data.x_coord.data(), size_data*sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(transformed_data_y_d, transformed_data.y_coord.data(), size_data*sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(transformed_data_z_d, transformed_data.z_coord.data(), size_data*sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpy(index_d, measurement_data.index.data(), size_data*sizeof(int), cudaMemcpyHostToDevice);
+
 	
-*/
-	//return icp_error;
-//}
+
+	return icp_error;
+}
 
 // Function to allocate matrix memory on the device
  
