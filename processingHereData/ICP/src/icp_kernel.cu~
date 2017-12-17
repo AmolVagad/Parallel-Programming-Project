@@ -65,15 +65,12 @@ __global__  void PerformRotationKernel( double * data_x, double * data_y, double
 
 __global__ void CalculateDistanceIndexEachPoint(double point_x, double point_y, double point_z, double * data_x_d, double * data_y_d, double * data_z_d, int * bin_index_d, double * distance_d, int size_data)
 {
-	unsigned int index = blockDim.x*blockIdx.x + threadIdx.x;
-
+	int index = blockDim.x*blockIdx.x + threadIdx.x;
 	if(index < size_data)
 	{
 		distance_d[index] = sqrt(pow(data_x_d[index] - point_x,2) + pow(data_y_d[index] - point_y,2) + pow(data_z_d[index] - point_z,2));
 		bin_index_d[index] = index;
 	}
-	
-
 	
 }
 
@@ -92,7 +89,7 @@ __global__ void CalculateBestIndex(double * distance_d, int * bin_index_d, int s
 	else
 	{
 		distance_s[t] = 65535;
-		bin_smallest_index[t] = -1;
+		bin_smallest_index[t] = 0;
 	}
 	if(start + blockDim.x + t < size_data)
 	{
@@ -102,7 +99,7 @@ __global__ void CalculateBestIndex(double * distance_d, int * bin_index_d, int s
 	else
 	{
 		distance_s[blockDim.x + t] = 65535;
-		bin_smallest_index[blockDim.x + t] = -1;
+		bin_smallest_index[blockDim.x + t] = 0;
 	}
 
 	for(unsigned int stride = blockDim.x; stride >= 1; stride >>= 1)
