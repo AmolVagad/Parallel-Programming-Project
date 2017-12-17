@@ -51,8 +51,6 @@ __global__  void PerformRotationKernel( double * data_x, double * data_y, double
 	double point_x = data_x_s[tx]*R_constant[0] + data_y_s[tx]*R_constant[1] + data_z_s[tx]*R_constant[2] + t_constant[0];
 	double point_y = data_x_s[tx]*R_constant[3] + data_y_s[tx]*R_constant[4] + data_z_s[tx]*R_constant[5] + t_constant[1];
 	double point_z = data_x_s[tx]*R_constant[6] + data_y_s[tx]*R_constant[7] + data_z_s[tx]*R_constant[8] + t_constant[2];
-	
-         __syncthreads();        // To ensure all elements of tile are loaded and consumed 
 
 	if(index < n)
 	{

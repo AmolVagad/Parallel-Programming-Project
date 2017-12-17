@@ -84,7 +84,7 @@ void PerformRotationOnDevice(const Matrix R_h, const Matrix t_h, point_cloud_dat
 	cudaMemcpy(data_z_d, data->z_coord.data(), size_data*sizeof(double), cudaMemcpyHostToDevice);
 	
 	cudaMemcpyToSymbol(R_constant,R_h.elements,3 * 3*sizeof(double));
-	cudaMemcpyToSymbol(t_constant, t_h.elements,3*sizeof(double), cudaMemcpyHostToDevice);
+	cudaMemcpyToSymbol(t_constant, t_h.elements,3*sizeof(double));
 	
 //----------------------------------------------------------- 
 	 
@@ -121,6 +121,10 @@ void PerformRotationOnDevice(const Matrix R_h, const Matrix t_h, point_cloud_dat
 		transformed_data->z_coord.push_back(temp_z[i]);
 		transformed_data->index.push_back(-1);
 	}
+
+	//cout<<"Value in transformed data "<<transformed_data->x_coord[0]<<endl;
+	//cout<<"Value in Temp x value "<<temp_x[0]<<endl;
+	//cout<<"Value in input data "<<data->x_coord[0]<<endl;
 
 	transformed_data->size = data->size;
 	
@@ -212,8 +216,8 @@ int main()
 	rt.height =  4;
 	column_vector rt_lower(4), rt_upper(4), rt_vec(4);
 	rt.elements = (double*)malloc(rt.width*rt.height*sizeof(double));
-	rt.elements[0] = 0;rt.elements[1] = 0;
-	rt.elements[2] = 0;rt.elements[3] = 0;
+	rt.elements[0] = 0.0;rt.elements[1] = 0.0;
+	rt.elements[2] = 0.0;rt.elements[3] = 0;
 	
 	rt_vec = rt.elements[0], rt.elements[1], rt.elements[2], rt.elements[3];	
 	rt_lower = -1.0, -1.0,-1.0,-1.0;
@@ -243,6 +247,10 @@ int main()
 		cout<<"The time taken for calculation = "<<((cpu_endtime - cpu_starttime)/CLOCKS_PER_SEC)<<endl;
 		cout<<"Rt parameters "<<rt_vec<<endl;
 		cout<<"current error: "<<final_error<<endl;
+		rt.elements[0] = rt_vec(0);
+		rt.elements[1] = rt_vec(1);
+		rt.elements[2] = rt_vec(2);
+		rt.elements[3] = rt_vec(3);
 		
 	}
 	//cout<<"Error after optimization "<<final_error<<endl;
@@ -282,7 +290,15 @@ void cal_closest_points(Matrix rt)
 
 
 	PerformRotationOnDevice(R_h, t_h, &measurement_data, &transformed_data);
-		
+
+	//cout<<"x of measurement data "<<transformed_data.x_coord[0]<<endl;
+	//cout<<"y of measurement data "<<transformed_data.y_coord[0]<<endl;
+	//cout<<"z of measurement data "<<transformed_data.z_coord[0]<<endl;		
+
+	//cout<<"x of transformed data "<<transformed_data.x_coord[0]<<endl;
+	//cout<<"y of transformed data "<<transformed_data.y_coord[0]<<endl;
+	//cout<<"z of transformed data "<<transformed_data.z_coord[0]<<endl;
+
 	//Calculate the closest point
 	double * x_coord_model_d;
 	cudaMalloc((void**)&x_coord_model_d, model_data.size*sizeof(double));
@@ -341,6 +357,7 @@ void cal_closest_points(Matrix rt)
 		cudaMemcpy(measurement_data.index.data() + i, index_d, sizeof(int), cudaMemcpyDeviceToHost);
 	}
 
+	cout<<"Index at some point "<<measurement_data.index[10]<<endl;
 	cudaFree(x_coord_model_d);
 	cudaFree(y_coord_model_d);
 	cudaFree(z_coord_model_d);
@@ -367,7 +384,7 @@ void cal_closest_points(Matrix rt)
 
 
 
-double findTotalErrorInCloudOnDevice(const column_vector &rt_vec) //This function can be written parallelly using Atomic Add operation
+double findTotalErrorInCloudOnDevice(const column_vector &rt_vec) 
 {
 	//iterations++;
 	double icp_error = 0.0;
