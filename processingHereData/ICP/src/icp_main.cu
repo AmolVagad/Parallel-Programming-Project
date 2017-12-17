@@ -31,7 +31,6 @@ __constant__ double t_constant[3];
 
 // Function declarations
 Matrix AllocateDeviceMatrix(const Matrix M);
-double findTotalErrorInCloudOnDevice(const Matrix rt);
 Vector AllocateDeviceVector(const Vector V);
 
 
@@ -46,7 +45,7 @@ point_cloud_data model_data;
 ///// For initial testing purposes carrying out rotation and translation operation on cuda//////////////////
 
 void cal_closest_points(Matrix rt);
-double findTotalErrorInCloudOnDevice(const column_vector &rt);
+double findTotalErrorInCloudOnDevice(const column_vector &rt_vec);
 
 
 // Function to carry out Rotation of given point on the device 
@@ -222,32 +221,32 @@ int main()
 
 	double temp_error = 0;	
 	double cpu_starttime , cpu_endtime;
-	temp_error = findTotalErrorInCloudOnDevice(rt_vec);
-	cpu_starttime = clock();
-	cal_closest_points(rt);
-	cpu_endtime = clock();
-	cout<<"The time taken for calculation of closest point = "<<((cpu_endtime - cpu_starttime)/CLOCKS_PER_SEC)<<endl;
-/*
+	//temp_error = findTotalErrorInCloudOnDevice(rt_vec);
+	//cpu_starttime = clock();
+	//cal_closest_points(rt);
+	//cpu_endtime = clock();
+	//cout<<"The time taken for calculation of closest point = "<<((cpu_endtime - cpu_starttime)/CLOCKS_PER_SEC)<<endl;
+
 	double final_error = 0;
 	// time measurement variables 
 
 
-	double cpu_starttime , cpu_endtime;
+	//double cpu_starttime , cpu_endtime;
 	for(int i = 0; i<20; i++)
 	{
 		cout<<"iteration #: "<<i<<endl;
 		cpu_starttime = clock();
 		cal_closest_points(rt);
+		final_error = find_optimal_parameters(0.01, 0.000000001,100000, rt_vec, rt_lower, rt_upper,findTotalErrorInCloudOnDevice);
+		//final_error = findTotalErrorInCloudOnDevice(rt_vec);
 		cpu_endtime = clock();
 		cout<<"The time taken for calculation = "<<((cpu_endtime - cpu_starttime)/CLOCKS_PER_SEC)<<endl;
-
-		final_error = find_optimal_parameters(0.01, 0.000000001,100000, rt, rt_lower, rt_upper,findTotalErrorInCloud);
-		cout<<"Rt parameters "<<rt<<endl;
+		cout<<"Rt parameters "<<rt_vec<<endl;
 		cout<<"current error: "<<final_error<<endl;
 		
 	}
 	//cout<<"Error after optimization "<<final_error<<endl;
-*/
+
 	
 	
 
@@ -323,33 +322,31 @@ void cal_closest_points(Matrix rt)
 		double point_y = transformed_data.y_coord[i];
 		double point_z = transformed_data.z_coord[i];
 		
-		find_closest_point_i<<<grid, block>>>(point_x, point_y, point_z, x_coord_model_d, y_coord_model_d, z_coord_model_d, index_d, distance_d, size_data);
+		CalculateDistanceIndexEachPoint<<<grid, block>>>(point_x, point_y, point_z, x_coord_model_d, y_coord_model_d, z_coord_model_d, index_d, distance_d, size_data);
 	
+		
 		while(grid.x > 1)
 		{	
+			cudaDeviceSynchronize();
 			//cout<<"Check grid 2 "<<grid.x<<endl;
-			size_data = grid.x;
-			if(grid.x%block.x == 0)
-				grid.x = grid.x/block.x;
-			else
-				grid.x = grid.x/block.x + 1;
 			
-
-
-			find_closest_point_2<<<grid,block>>>(distance_d, index_d, size_data);
+			if(size_data%block.x == 0)
+				grid.x = size_data/block.x;
+			else
+				grid.x = size_data/block.x + 1;
+			
+			CalculateBestIndex<<<grid,block>>>(distance_d, index_d, size_data);
+			size_data = grid.x;
 		}		
 		cudaMemcpy(measurement_data.index.data() + i, index_d, sizeof(int), cudaMemcpyDeviceToHost);
-		//cout<<"Check index "<<measurement_data.index[0]<<endl;
-
 	}
-	//cudaMemcpy(measurement_data.index.data(), bin_index_d, transformed_data.size*sizeof(int), cudaMemcpyDeviceToHost);
 
-	for(int i = 0; i < transformed_data.size; i++)
-	{	
-		if(measurement_data.index[i] < 100)
-		cout<<"Print index values "<<measurement_data.index[i]<<endl;
-	}
-	cout<<"Transformed data size "<<transformed_data.size<<endl;
+	cudaFree(x_coord_model_d);
+	cudaFree(y_coord_model_d);
+	cudaFree(z_coord_model_d);
+	cudaFree(distance_d);
+	cudaFree(index_d);
+		
 
 
 
@@ -370,7 +367,7 @@ void cal_closest_points(Matrix rt)
 
 
 
-double findTotalErrorInCloudOnDevice(const column_vector &rt) //This function can be written parallelly using Atomic Add operation
+double findTotalErrorInCloudOnDevice(const column_vector &rt_vec) //This function can be written parallelly using Atomic Add operation
 {
 	//iterations++;
 	double icp_error = 0.0;
@@ -381,11 +378,11 @@ double findTotalErrorInCloudOnDevice(const column_vector &rt) //This function ca
 	t.elements = (double*)malloc(t.width*t.height*sizeof(double));
 
 	
-	R.elements[0] = cos(rt(0));R.elements[1] = -sin(rt(0));R.elements[2] = 0; R.elements[3] = sin(rt(0));R.elements[4] = cos(rt(0));R.elements[5] = 0;
+	R.elements[0] = cos(rt_vec(0));R.elements[1] = -sin(rt_vec(0));R.elements[2] = 0; R.elements[3] = sin(rt_vec(0));R.elements[4] = cos(rt_vec(0));R.elements[5] = 0;
 	R.elements[6] = 0; R.elements[7] = 0; R.elements[8] = 1;
-	t.elements[0] = rt(1);
-	t.elements[1] =  rt(2);
-	t.elements[2] =  rt(3);
+	t.elements[0] = rt_vec(1);
+	t.elements[1] =  rt_vec(2);
+	t.elements[2] =  rt_vec(3);
 	//cout<<"Check measurement data element "<<measurement_data.x_coord.at(0)<<endl;
 	PerformRotationOnDevice(R, t, &measurement_data, &transformed_data);
 
@@ -421,8 +418,42 @@ double findTotalErrorInCloudOnDevice(const column_vector &rt) //This function ca
 	cudaMemcpy(transformed_data_z_d, transformed_data.z_coord.data(), size_data*sizeof(double), cudaMemcpyHostToDevice);
 	cudaMemcpy(index_d, measurement_data.index.data(), size_data*sizeof(int), cudaMemcpyHostToDevice);
 
-	
 
+	dim3 block, grid;
+	block.x = TILE_WIDTH;
+	block.y = 1;
+	block.z = 1;
+	if(size_data%block.x == 0)
+		grid.x = size_data/block.x;
+	else
+		grid.x = size_data/block.x + 1;
+	grid.y = 1;
+	grid.z = 1;
+
+	CalculateDistanceAllPoints<<<grid, block>>>(data_x_d, data_y_d, data_z_d, transformed_data_x_d, transformed_data_y_d, transformed_data_z_d, index_d, distance_d, size_data);
+	while(grid.x > 1)
+	{	
+		cudaDeviceSynchronize();
+		if(size_data%block.x == 0)
+			grid.x = size_data/block.x;
+		else
+			grid.x = size_data/block.x + 1;
+
+		CalculateTotalError<<<grid,block>>>(distance_d, size_data);
+		size_data = grid.x;
+	}
+	
+	cudaMemcpy(&icp_error, distance_d, sizeof(double), cudaMemcpyDeviceToHost);
+
+	cudaFree(data_x_d);
+	cudaFree(data_y_d);
+	cudaFree(data_z_d);
+	cudaFree(transformed_data_x_d);
+	cudaFree(transformed_data_y_d);
+	cudaFree(transformed_data_z_d);
+	cudaFree(index_d);
+	cudaFree(distance_d);
+	
 	return icp_error;
 }
 

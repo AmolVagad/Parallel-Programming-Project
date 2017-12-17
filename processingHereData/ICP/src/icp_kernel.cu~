@@ -63,52 +63,21 @@ __global__  void PerformRotationKernel( double * data_x, double * data_y, double
 }
 
 
-__global__ void find_closest_point_i(double point_x, double point_y, double point_z, double * x_coord_model_d, double * y_coord_model_d, double * z_coord_model_d, int * bin_index_d, double * distance_d, int size_data)
+__global__ void CalculateDistanceIndexEachPoint(double point_x, double point_y, double point_z, double * data_x_d, double * data_y_d, double * data_z_d, int * bin_index_d, double * distance_d, int size_data)
 {
-	__shared__ double distance_s[2*TILE_WIDTH];
-	__shared__ unsigned int bin_smallest_index[TILE_WIDTH];
-	unsigned int t = threadIdx.x;
-	unsigned int start = 2*blockDim.x*blockIdx.x;
+	unsigned int index = blockDim.x*blockIdx.x + threadIdx.x;
 
-	if(start + t < size_data)
+	if(index < size_data)
 	{
-		distance_s[t] = sqrt(pow(x_coord_model_d[start + t] - point_x,2) + pow(y_coord_model_d[start + t] - point_y,2) + pow(z_coord_model_d[start + t] - point_z,2));	
-		bin_smallest_index[t] = 0; 	
+		distance_d[index] = sqrt(pow(data_x_d[index] - point_x,2) + pow(data_y_d[index] - point_y,2) + pow(data_z_d[index] - point_z,2));
+		bin_index_d[index] = index;
 	}
-	else
-		distance_s[t] = 65535;
-	if(start + blockDim.x + t < size_data)
-	{
-		distance_s[blockDim.x + t] = sqrt(pow(x_coord_model_d[start + blockDim.x + t] - point_x,2) + pow(y_coord_model_d[start + blockDim.x + t] - point_y,2) + pow(z_coord_model_d[start + blockDim.x + t] - point_z,2));
-	}
-	else
-		distance_s[t] = 65535;
-
-	for(unsigned int stride = blockDim.x; stride >= 1; stride >>= 1)
-	{
-		__syncthreads();
-		if(t < stride)
-			if(distance_s[t] > distance_s[stride + t])
-			{
-				bin_smallest_index[t] = start + stride + t;
-				distance_s[t] = distance_s[stride + t];
-			}
-			else
-			{
-				bin_smallest_index[t] = start + t;	
-			}
-	}
-
-	if(t == 0)
-	{
-		distance_d[blockIdx.x] = distance_s[t];
-		bin_index_d[blockIdx.x] = bin_smallest_index[t];	
-	}
+	
 
 	
 }
 
-__global__ void find_closest_point_2(double * distance_d, int * bin_index_d, int size_data)
+__global__ void CalculateBestIndex(double * distance_d, int * bin_index_d, int size_data)
 {
 	__shared__ double distance_s[2*TILE_WIDTH];
 	__shared__ unsigned int bin_smallest_index[2*TILE_WIDTH];
@@ -123,7 +92,7 @@ __global__ void find_closest_point_2(double * distance_d, int * bin_index_d, int
 	else
 	{
 		distance_s[t] = 65535;
-		bin_smallest_index[t] = 0;
+		bin_smallest_index[t] = -1;
 	}
 	if(start + blockDim.x + t < size_data)
 	{
@@ -133,7 +102,7 @@ __global__ void find_closest_point_2(double * distance_d, int * bin_index_d, int
 	else
 	{
 		distance_s[blockDim.x + t] = 65535;
-		bin_smallest_index[blockDim.x + t] = 0;
+		bin_smallest_index[blockDim.x + t] = -1;
 	}
 
 	for(unsigned int stride = blockDim.x; stride >= 1; stride >>= 1)
