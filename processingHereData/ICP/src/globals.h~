@@ -16,6 +16,7 @@ extern double range_z ;
 // Define Octree 
 extern Octree<std::vector<double>> octree_icp; 
 
+typedef dlib::matrix<double,0,1> column_vector;
 
 #ifndef _ICP_H_
 #define _ICP_H_
@@ -49,6 +50,20 @@ struct point_cloud_data{
 	std::vector <int> index;
 	int size ;	
 };
+
+extern point_cloud_data measurement_data;
+extern point_cloud_data model_data;
+
+extern dlib::matrix<double> PerformRotation(dlib::matrix<double> R,dlib::matrix<double> t, dlib::matrix<double> point);
+
+extern void PerformTransformationToAllPoints(dlib::matrix<double> R, dlib::matrix<double> t, point_cloud_data * data, point_cloud_data * transformed_data, int skips);
+
+extern void cal_closest_points_cpu(const column_vector &rt);
+
+extern double findTotalErrorInCloud_cpu(const column_vector &rt);
+
+extern dlib::matrix<double> compute_gold();
+
 
 
 

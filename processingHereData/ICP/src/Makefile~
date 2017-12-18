@@ -21,8 +21,8 @@ default: $(EXE)
 icp_cu.o: icp_main.cu icp_kernel.cu globals.h
 	$(NVCC) -c -o $@ icp_main.cu $(NVCC_FLAGS)
 
-icp_cpp.o: icp_computegold.cpp globals.h
-	$(NVCC) -c -o $@ icp_computegold.cpp $(NVCC_FLAGS) 
+icp_cpp.o: icp_gold.cpp globals.h
+	$(NVCC) -c -o $@ icp_gold.cpp $(NVCC_FLAGS) 
 
 $(EXE): $(OBJ)
 	$(NVCC) $(OBJ) -o $(EXE) $(LD_FLAGS) $(NVCC_FLAGS)

@@ -17,6 +17,7 @@
 #include "dlib/optimization/find_optimal_parameters.h" 
 #include "octree_code/octree.h"
 #include "globals.h"
+//#include "icp_gold.cpp"
 
 extern "C"
 
@@ -39,7 +40,16 @@ Vector AllocateDeviceVector(const Vector V);
 point_cloud_data measurement_data;
 point_cloud_data model_data;
 
+//CPU functions
+dlib::matrix<double> PerformRotation(dlib::matrix<double> R,dlib::matrix<double> t, dlib::matrix<double> point);
 
+void PerformTransformationToAllPoints(dlib::matrix<double> R, dlib::matrix<double> t, point_cloud_data * data, point_cloud_data * transformed_data, int skips);
+
+void cal_closest_points_cpu(const column_vector &rt);
+
+double findTotalErrorInCloud_cpu(const column_vector &rt);
+
+dlib::matrix<double> compute_gold();
 	
 
 ///// For initial testing purposes carrying out rotation and translation operation on cuda//////////////////
@@ -234,17 +244,22 @@ int main()
 	double final_error = 0;
 	// time measurement variables 
 
+	column_vector rt_gold(5);
+	rt_gold = compute_gold();
+	
+	cout<<"Rt gold "<<rt_gold<<endl;
 
+
+	cpu_starttime = clock();
 	//double cpu_starttime , cpu_endtime;
 	for(int i = 0; i<20; i++)
 	{
 		cout<<"iteration #: "<<i<<endl;
-		cpu_starttime = clock();
+		
 		cal_closest_points(rt);
 		final_error = find_optimal_parameters(0.01, 0.000000001,100000, rt_vec, rt_lower, rt_upper,findTotalErrorInCloudOnDevice);
 		//final_error = findTotalErrorInCloudOnDevice(rt_vec);
-		cpu_endtime = clock();
-		cout<<"The time taken for calculation = "<<((cpu_endtime - cpu_starttime)/CLOCKS_PER_SEC)<<endl;
+		
 		cout<<"Rt parameters "<<rt_vec<<endl;
 		cout<<"current error: "<<final_error<<endl;
 		rt.elements[0] = rt_vec(0);
@@ -253,10 +268,11 @@ int main()
 		rt.elements[3] = rt_vec(3);
 		
 	}
+	cpu_endtime = clock();
+	cout<<"The time taken for calculation = "<<((cpu_endtime - cpu_starttime)/CLOCKS_PER_SEC)<<endl;
 	//cout<<"Error after optimization "<<final_error<<endl;
+	
 
-	
-	
 
 
 
